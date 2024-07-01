@@ -8826,6 +8826,7 @@ static int ufshcd_probe_hba(struct ufs_hba *hba, bool init_dev_params)
 	     ret == -EAGAIN)) {
 		/* Reset the device and controller before doing reinit */
 		ufshcd_device_reset(hba);
+		ufs_put_device_desc(hba);
 		ufshcd_hba_stop(hba);
 		ufshcd_vops_reinit_notify(hba);
 		ret = ufshcd_hba_enable(hba);

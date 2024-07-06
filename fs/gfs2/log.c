@@ -1101,8 +1101,9 @@ repeat:
 	lops_before_commit(sdp, tr);
 	if (gfs2_withdrawn(sdp))
 		goto out_withdraw;
-	gfs2_log_submit_bio(&sdp->sd_jdesc->jd_log_bio, REQ_OP_WRITE);
-	if (gfs2_withdrawn(sdp))
+	if (sdp->sd_jdesc)
+		gfs2_log_submit_bio(&sdp->sd_jdesc->jd_log_bio, REQ_OP_WRITE);
+	if (gfs2_withdrawing_or_withdrawn(sdp))
 		goto out_withdraw;
 
 	if (sdp->sd_log_head != sdp->sd_log_flush_head) {

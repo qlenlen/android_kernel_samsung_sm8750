@@ -2,6 +2,7 @@
 
 set -e
 
+# download toolchain from https://opensource.samsung.com/uploadSearch?searchValue=toolchain 
 TOOLCHAIN=$(realpath "../toolchain_samsung_sm8750/kernel_platform/prebuilts")
 
 export PATH=$PATH:$TOOLCHAIN/build-tools/linux-x86/bin

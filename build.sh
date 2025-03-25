@@ -5,11 +5,10 @@ set -e
 # download toolchain from https://opensource.samsung.com/uploadSearch?searchValue=toolchain 
 TOOLCHAIN=$(realpath "../toolchain_samsung_sm8750/kernel_platform/prebuilts")
 
-export PATH=$PATH:$TOOLCHAIN/build-tools/linux-x86/bin
-export PATH=$PATH:$TOOLCHAIN/build-tools/path/linux-x86
-export PATH=$PATH:$TOOLCHAIN/clang/host/linux-x86/clang-r510928/bin
-export PATH=$PATH:$TOOLCHAIN/clang-tools/linux-x86/bin
-export PATH=$PATH:$TOOLCHAIN/kernel-build-tools/linux-x86/bin
+export PATH=$TOOLCHAIN/build-tools/linux-x86/bin:$PATH
+export PATH=$TOOLCHAIN/build-tools/path/linux-x86:$PATH
+export PATH=$TOOLCHAIN/clang-r522817/bin:$PATH
+export PATH=$TOOLCHAIN/kernel-build-tools/linux-x86/bin:$PATH
 
 
 LLD_COMPILER_RT="-fuse-ld=lld --rtlib=compiler-rt"
@@ -52,3 +51,13 @@ fi
 
 make -j$(nproc) -C $(pwd) O=$(pwd)/out ${ARGS}
 
+# pack AnyKernel3
+cd out
+if [ ! -d AnyKernel3 ]; then
+  git clone --depth=1 https://github.com/fei-ke/AnyKernel3.git -b s25
+fi
+cp arch/arm64/boot/Image AnyKernel3/zImage
+name=s25_gki_kernel_`cat include/config/kernel.release`_`date '+%Y_%m_%d'`
+cd AnyKernel3
+zip -r ${name}.zip * -x *.zip
+echo "AnyKernel3 package output to $(realpath $name).zip"

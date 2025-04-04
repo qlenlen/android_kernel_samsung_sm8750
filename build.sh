@@ -23,7 +23,7 @@ export LD_LIBRARY_PATH="$TOOLCHAIN/kernel-build-tools/linux-x86/lib64"
 export HOSTCFLAGS="$sysroot_flags $cflags"
 export HOSTLDFLAGS="$sysroot_flags $ldflags"
 
-TARGET_DEFCONFIG=${1:-stock_gki_defconfig}
+TARGET_DEFCONFIG=${1:-gki_defconfig}
 
 cd "$(dirname "$0")"
 

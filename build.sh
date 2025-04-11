@@ -43,7 +43,8 @@ make -j$(nproc) -C $(pwd) O=$(pwd)/out ${ARGS} $TARGET_DEFCONFIG
   -d SECURITY_DEFEX \
   -d INTEGRITY \
   -d FIVE \
-  -d TRIM_UNUSED_KSYMS
+  -d TRIM_UNUSED_KSYMS \
+  -d PM_DEBUG
 
 if [ "$LTO" = "thin" ]; then
   ./scripts/config --file out/.config -e LTO_CLANG_THIN -d LTO_CLANG_FULL

@@ -21,8 +21,15 @@
 #include <linux/unistd.h>
 #include <linux/compat.h>
 #include <linux/uaccess.h>
+#ifdef CONFIG_KSU_SUSFS_SUS_PATH
+#include <linux/susfs_def.h>
+#endif
 
 #include <asm/unaligned.h>
+
+#ifdef CONFIG_KSU_SUSFS_SUS_PATH
+extern int susfs_sus_ino_for_filldir64(unsigned long ino);
+#endif
 
 /*
  * Some filesystems were never converted to '->iterate_shared()'
@@ -184,6 +191,11 @@ static bool fillonedir(struct dir_context *ctx, const char *name, int namlen,
 	struct old_linux_dirent __user * dirent;
 	unsigned long d_ino;
 
+#ifdef CONFIG_KSU_SUSFS_SUS_PATH
+	if (likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC) && susfs_sus_ino_for_filldir64(ino)) {
+		return true;
+	}
+#endif
 	if (buf->result)
 		return false;
 	buf->result = verify_dirent_name(name, namlen);
@@ -266,6 +278,11 @@ static bool filldir(struct dir_context *ctx, const char *name, int namlen,
 		sizeof(long));
 	int prev_reclen;
 
+#ifdef CONFIG_KSU_SUSFS_SUS_PATH
+	if (likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC) && susfs_sus_ino_for_filldir64(ino)) {
+		return true;
+	}
+#endif
 	buf->error = verify_dirent_name(name, namlen);
 	if (unlikely(buf->error))
 		return false;
@@ -353,6 +370,11 @@ static bool filldir64(struct dir_context *ctx, const char *name, int namlen,
 		sizeof(u64));
 	int prev_reclen;
 
+#ifdef CONFIG_KSU_SUSFS_SUS_PATH
+	if (likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC) && susfs_sus_ino_for_filldir64(ino)) {
+		return true;
+	}
+#endif
 	buf->error = verify_dirent_name(name, namlen);
 	if (unlikely(buf->error))
 		return false;
@@ -442,6 +464,11 @@ static bool compat_fillonedir(struct dir_context *ctx, const char *name,
 	struct compat_old_linux_dirent __user *dirent;
 	compat_ulong_t d_ino;
 
+#ifdef CONFIG_KSU_SUSFS_SUS_PATH
+	if (likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC) && susfs_sus_ino_for_filldir64(ino)) {
+		return true;
+	}
+#endif
 	if (buf->result)
 		return false;
 	buf->result = verify_dirent_name(name, namlen);

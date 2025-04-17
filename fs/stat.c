@@ -20,11 +20,18 @@
 #include <linux/compat.h>
 #include <linux/iversion.h>
 
+#if defined(CONFIG_KSU_SUSFS_SUS_KSTAT) || defined(CONFIG_KSU_SUSFS_SUS_MOUNT)
+#include <linux/susfs_def.h>
+#endif
 #include <linux/uaccess.h>
 #include <asm/unistd.h>
 
 #include "internal.h"
 #include "mount.h"
+
+#ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
+extern void susfs_sus_ino_for_generic_fillattr(unsigned long ino, struct kstat *stat);
+#endif
 
 /**
  * generic_fillattr - Fill in the basic attributes from the inode struct
@@ -49,6 +56,17 @@ void generic_fillattr(struct mnt_idmap *idmap, u32 request_mask,
 	vfsuid_t vfsuid = i_uid_into_vfsuid(idmap, inode);
 	vfsgid_t vfsgid = i_gid_into_vfsgid(idmap, inode);
 
+#ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
+	if (likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC) &&
+			unlikely(inode->i_state & INODE_STATE_SUS_KSTAT)) {
+		susfs_sus_ino_for_generic_fillattr(inode->i_ino, stat);
+		stat->mode = inode->i_mode;
+		stat->rdev = inode->i_rdev;
+		stat->uid = vfsuid_into_kuid(vfsuid);
+		stat->gid = vfsgid_into_kgid(vfsgid);
+		return;
+	}
+#endif
 	stat->dev = inode->i_sb->s_dev;
 	stat->ino = inode->i_ino;
 	stat->mode = inode->i_mode;
@@ -235,6 +253,9 @@ static int vfs_statx(int dfd, struct filename *filename, int flags,
 	struct path path;
 	unsigned int lookup_flags = getname_statx_lookup_flags(flags);
 	int error;
+#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
+	struct mount *mnt;
+#endif
 
 	if (flags & ~(AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT | AT_EMPTY_PATH |
 		      AT_STATX_SYNC_TYPE))
@@ -247,7 +268,15 @@ retry:
 
 	error = vfs_getattr(&path, stat, request_mask, flags);
 
+#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
+	mnt = real_mount(path.mnt);
+	if (likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC)) {
+		for (; mnt->mnt_id >= DEFAULT_SUS_MNT_ID; mnt = mnt->mnt_parent) {}
+	}
+	stat->mnt_id = mnt->mnt_id;
+#else
 	stat->mnt_id = real_mount(path.mnt)->mnt_id;
+#endif
 	stat->result_mask |= STATX_MNT_ID;
 
 	if (path.mnt->mnt_root == path.dentry)
@@ -270,6 +299,11 @@ retry:
 out:
 	return error;
 }
+
+#ifdef CONFIG_KSU_SUSFS_SUS_SU
+extern bool susfs_is_sus_su_hooks_enabled __read_mostly;
+extern struct filename* susfs_ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);
+#endif
 
 int vfs_fstatat(int dfd, const char __user *filename,
 			      struct kstat *stat, int flags)
@@ -295,7 +329,17 @@ int vfs_fstatat(int dfd, const char __user *filename,
 			return vfs_fstat(dfd, stat);
 	}
 
+#ifdef CONFIG_KSU_SUSFS_SUS_SU
+	if (susfs_is_sus_su_hooks_enabled) {
+		name = susfs_ksu_handle_stat(&dfd, &filename, &statx_flags);
+		goto orig_flow;
+	}
+#endif
+
 	name = getname_flags(filename, getname_statx_lookup_flags(statx_flags), NULL);
+#ifdef CONFIG_KSU_SUSFS_SUS_SU
+orig_flow:
+#endif
 	ret = vfs_statx(dfd, name, statx_flags, stat, STATX_BASIC_STATS);
 	putname(name);
 

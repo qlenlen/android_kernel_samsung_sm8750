@@ -33,6 +33,8 @@ ARCH=arm64
 LLVM=1 LLVM_IAS=1
 "
 
+curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next-susfs/kernel/setup.sh" | bash -s next-susfs
+
 # build kernel
 make -j$(nproc) -C $(pwd) O=$(pwd)/out ${ARGS} $TARGET_DEFCONFIG
 

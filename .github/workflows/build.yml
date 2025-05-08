@@ -36,6 +36,7 @@ jobs:
       - name: Build
         run: |
           cd source
+          export LTO=thin
           ./build.sh
 
       - name: Upload Artifact

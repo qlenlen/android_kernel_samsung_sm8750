@@ -1,0 +1,11 @@
+config REKERNEL
+  bool "Rekernel"
+  default y
+  help
+    Make tombstone users get a better experience
+
+config NETWORK_FILTER
+  bool "Network filter"
+  default n
+  help
+    Filter network packets

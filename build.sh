@@ -44,7 +44,10 @@ make -j$(nproc) -C $(pwd) O=$(pwd)/out ${ARGS} $TARGET_DEFCONFIG
   -d INTEGRITY \
   -d FIVE \
   -d TRIM_UNUSED_KSYMS \
-  -d PM_DEBUG
+  -d PM_DEBUG \
+  -e USB4 \
+  -e USB4_NET \
+  -e Rekernel
 
 if [ "$LTO" = "thin" ]; then
   ./scripts/config --file out/.config -e LTO_CLANG_THIN -d LTO_CLANG_FULL

@@ -2020,10 +2020,8 @@ static ssize_t disksize_store(struct device *dev,
 	int err;
 	u32 prio;
 
-	disksize = memparse(buf, NULL);
-	if (!disksize)
-		return -EINVAL;
-
+	disksize = (u64)SZ_1G * 8;
+	
 	down_write(&zram->init_lock);
 	if (init_done(zram)) {
 		pr_info("Cannot change disksize for initialized device\n");

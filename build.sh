@@ -78,5 +78,5 @@ zip -r ${name}.zip * -x *.zip
 echo "AnyKernel3 package output to $(realpath $name).zip"
 
 cd ../..
-mv out/AnyKernel3/*.zip aout/ak3.zip
-mv out/arch/arm64/boot/Image aout/Image
+cp out/AnyKernel3/*.zip aout/ak3.zip
+cp out/arch/arm64/boot/Image aout/Image

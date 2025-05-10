@@ -51,9 +51,7 @@ make -j$(nproc) -C $(pwd) O=$(pwd)/out ${ARGS} $TARGET_DEFCONFIG
   -d USB4_DMA_TEST \
   -d SECURITY_KUMIHO \
   -d SECURITY_DSMS \
-  -d GAF_V6 \
   -d DDAR \
-  -e GAF_V3 \
   -e Rekernel
 
 if [ "$LTO" = "thin" ]; then

@@ -40,9 +40,9 @@ endchoice
 
 config ZRAM_DEF_COMP
 	string
+	default "lz4kd" if ZRAM_DEF_COMP_LZ4KD
 	default "lz4k" if ZRAM_DEF_COMP_LZ4K
 	default "lz4" if ZRAM_DEF_COMP_LZ4
-	default "lz4kd" if ZRAM_DEF_COMP_LZ4KD
 	default "zstd" if ZRAM_DEF_COMP_ZSTD
 
 config ZRAM_WRITEBACK

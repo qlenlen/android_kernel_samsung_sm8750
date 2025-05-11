@@ -2020,7 +2020,7 @@ static ssize_t disksize_store(struct device *dev,
 	int err;
 	u32 prio;
 
-	disksize = (u64)SZ_1G * 8;
+	disksize = (u64)SZ_1G * 12;
 	
 	down_write(&zram->init_lock);
 	if (init_done(zram)) {

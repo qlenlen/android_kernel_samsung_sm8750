@@ -17,8 +17,12 @@ config ZRAM
 
 choice
 	prompt "Default zram compressor"
-	default ZRAM_DEF_COMP_LZ4K
+	default ZRAM_DEF_COMP_LZ4KD
 	depends on ZRAM
+
+config ZRAM_DEF_COMP_LZ4KD
+	bool "lz4kd"
+	depends on CRYPTO_LZ4KD
 
 config ZRAM_DEF_COMP_LZ4K
 	bool "lz4k"
@@ -27,10 +31,6 @@ config ZRAM_DEF_COMP_LZ4K
 config ZRAM_DEF_COMP_LZ4
 	bool "lz4"
 	depends on CRYPTO_LZ4
-
-config ZRAM_DEF_COMP_LZ4KD
-	bool "lz4kd"
-	depends on CRYPTO_LZ4KD
 
 config ZRAM_DEF_COMP_ZSTD
 	bool "zstd"

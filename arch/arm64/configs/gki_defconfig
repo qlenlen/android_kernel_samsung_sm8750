@@ -1,6 +1,6 @@
 #
 # Automatically generated file; DO NOT EDIT.
-# Linux/arm64 6.6.31 Kernel Configuration
+# Linux/arm64 6.6.90 Kernel Configuration
 #
 CONFIG_CC_VERSION_TEXT="Android (11967740, +pgo, +bolt, +lto, +mlgo, based on r522817) clang version 18.0.1 (https://android.googlesource.com/toolchain/llvm-project d8003a456d14a3deb8054cdaa529ffbf02d9b262)"
 CONFIG_GCC_VERSION=0
@@ -734,8 +734,8 @@ CONFIG_ARCH_SUPPORTS_LTO_CLANG=y
 CONFIG_ARCH_SUPPORTS_LTO_CLANG_THIN=y
 CONFIG_HAS_LTO_CLANG=y
 # CONFIG_LTO_NONE is not set
-CONFIG_LTO_CLANG_FULL=y
-# CONFIG_LTO_CLANG_THIN is not set
+# CONFIG_LTO_CLANG_FULL is not set
+CONFIG_LTO_CLANG_THIN=y
 CONFIG_ARCH_SUPPORTS_CFI_CLANG=y
 CONFIG_CFI_CLANG=y
 # CONFIG_CFI_PERMISSIVE is not set
@@ -7754,3 +7754,4 @@ CONFIG_ARCH_USE_MEMTEST=y
 #
 # end of Rust hacking
 # end of Kernel hacking
+# CONFIG_FIVE is not set

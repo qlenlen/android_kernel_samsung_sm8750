@@ -95,7 +95,8 @@ config PROC_AVC
         default n
         help
             support logging audit avc message
-            When PROC_AVC config is turned on, proc/avc_msg path is created and then,
+            When PROC_AVC config is turned on,
+            proc/avc_msg path is created and then,
             can use it to analyze the SEandroid denial.
 
 config PROC_CHILDREN

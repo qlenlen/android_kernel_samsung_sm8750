@@ -227,6 +227,7 @@ struct ndisc_options *ndisc_parse_options(const struct net_device *dev,
 		return NULL;
 	memset(ndopts, 0, sizeof(*ndopts));
 	while (opt_len) {
+		bool unknown = false;
 		int l;
 		if (opt_len < sizeof(struct nd_opt_hdr))
 			return NULL;
@@ -262,22 +263,23 @@ struct ndisc_options *ndisc_parse_options(const struct net_device *dev,
 			break;
 #endif
 		default:
-			if (ndisc_is_useropt(dev, nd_opt)) {
-				ndopts->nd_useropts_end = nd_opt;
-				if (!ndopts->nd_useropts)
-					ndopts->nd_useropts = nd_opt;
-			} else {
-				/*
-				 * Unknown options must be silently ignored,
-				 * to accommodate future extension to the
-				 * protocol.
-				 */
-				ND_PRINTK(2, notice,
-					  "%s: ignored unsupported option; type=%d, len=%d\n",
-					  __func__,
-					  nd_opt->nd_opt_type,
-					  nd_opt->nd_opt_len);
-			}
+			unknown = true;
+		}
+		if (ndisc_is_useropt(dev, nd_opt)) {
+			ndopts->nd_useropts_end = nd_opt;
+			if (!ndopts->nd_useropts)
+				ndopts->nd_useropts = nd_opt;
+		} else if (unknown) {
+			/*
+			 * Unknown options must be silently ignored,
+			 * to accommodate future extension to the
+			 * protocol.
+			 */
+			ND_PRINTK(2, notice,
+				  "%s: ignored unsupported option; type=%d, len=%d\n",
+				  __func__,
+				  nd_opt->nd_opt_type,
+				  nd_opt->nd_opt_len);
 		}
 next_opt:
 		opt_len -= l;
@@ -953,12 +955,11 @@ have_ifp:
 			     NEIGH_UPDATE_F_WEAK_OVERRIDE|
 			     NEIGH_UPDATE_F_OVERRIDE,
 			     NDISC_NEIGHBOUR_SOLICITATION, &ndopts);
-	
+
 	if (neigh != NULL && neigh->dev != NULL && !strcmp(neigh->dev->name, "aware_data0")) {
-		pr_info("ipv6 neigh_lookup is done by receiving NS"
-			" from [:%02x%02x] to [:%02x%02x] and sending NA for %s\n",
-			saddr->s6_addr[14], saddr->s6_addr[15], 
-			daddr->s6_addr[14], daddr->s6_addr[15], 
+		pr_info("ipv6 neigh_lookup is done by receiving NS from [:%02x%02x] to [:%02x%02x] and sending NA for %s\n",
+			saddr->s6_addr[14], saddr->s6_addr[15],
+			daddr->s6_addr[14], daddr->s6_addr[15],
 			neigh->dev->name);
 	}
 
@@ -1124,10 +1125,9 @@ static enum skb_drop_reason ndisc_recv_na(struct sk_buff *skb)
 			     NDISC_NEIGHBOUR_ADVERTISEMENT, &ndopts);
 
 		if (neigh->dev != NULL && !strcmp(neigh->dev->name, "aware_data0")) {
-			pr_info("ipv6 neigh_lookup is done by receiving NA"
-				" from [:%02x%02x] to [:%02x%02x] for %s\n",
-				saddr->s6_addr[14], saddr->s6_addr[15], 
-				daddr->s6_addr[14], daddr->s6_addr[15], 
+			pr_info("ipv6 neigh_lookup is done by receiving NA from [:%02x%02x] to [:%02x%02x] for %s\n",
+				saddr->s6_addr[14], saddr->s6_addr[15],
+				daddr->s6_addr[14], daddr->s6_addr[15],
 				dev->name);
 		}
 
@@ -1725,17 +1725,19 @@ void ndisc_send_redirect(struct sk_buff *skb, const struct in6_addr *target)
 	if (IS_ERR(dst))
 		return;
 
-	rt = (struct rt6_info *) dst;
+	rt = dst_rt6_info(dst);
 
 	if (rt->rt6i_flags & RTF_GATEWAY) {
 		ND_PRINTK(2, warn,
 			  "Redirect: destination is not a neighbour\n");
 		goto release;
 	}
-	peer = inet_getpeer_v6(net->ipv6.peers, &ipv6_hdr(skb)->saddr, 1);
+
+	rcu_read_lock();
+	peer = inet_getpeer_v6(net->ipv6.peers, &ipv6_hdr(skb)->saddr);
 	ret = inet_peer_xrlim_allow(peer, 1*HZ);
-	if (peer)
-		inet_putpeer(peer);
+	rcu_read_unlock();
+
 	if (!ret)
 		goto release;
 

@@ -19,6 +19,7 @@
 #include <linux/version.h>
 #include "include/defex_caches.h"
 #include "include/defex_catch_list.h"
+#include "include/defex_config.h"
 #include "include/defex_debug.h"
 #include "include/defex_internal.h"
 
@@ -28,18 +29,19 @@
 
 MODULE_DESCRIPTION("Defex Linux Security Module");
 
-bool boot_state_recovery __ro_after_init;
+static bool boot_state_recovery __ro_after_init;
 
 static int defex_reboot_notifier(struct notifier_block *nb, unsigned long action, void *unused);
-volatile bool is_reboot_pending;
+static atomic_t reboot_pending = ATOMIC_INIT(0);
+
 static struct notifier_block defex_reboot_nb = {
 	.notifier_call = defex_reboot_notifier,
 	.priority = INT_MAX,
 };
 
 #ifdef DEFEX_DEPENDING_ON_OEMUNLOCK
-bool boot_state_unlocked __ro_after_init;
-int warranty_bit __ro_after_init;
+static bool boot_state_unlocked __ro_after_init;
+static int warranty_bit __ro_after_init;
 #endif /* DEFEX_DEPENDING_ON_OEMUNLOCK */
 
 asmlinkage int defex_syscall_enter(long syscallno, struct pt_regs *regs);
@@ -86,6 +88,11 @@ __visible_for_testing int __init verifiedboot_state_setup(char *str)
 	return 0;
 }
 
+bool is_boot_state_unlocked(void)
+{
+	return boot_state_unlocked;
+}
+
 __visible_for_testing int __init warrantybit_setup(char *str)
 {
 	if (get_option(&str, &warranty_bit))
@@ -95,6 +102,12 @@ __visible_for_testing int __init warrantybit_setup(char *str)
 
 __setup("androidboot.verifiedbootstate=", verifiedboot_state_setup);
 __setup("androidboot.warranty_bit=", warrantybit_setup);
+
+int get_warranty_bit(void)
+{
+	return warranty_bit;
+}
+
 #endif /* DEFEX_DEPENDING_ON_OEMUNLOCK */
 
 __visible_for_testing int __init bootstate_recovery_setup(char *str)
@@ -106,6 +119,12 @@ __visible_for_testing int __init bootstate_recovery_setup(char *str)
 	return 0;
 }
 __setup("bootmode=", bootstate_recovery_setup);
+
+
+bool is_boot_state_recovery(void)
+{
+	return boot_state_recovery;
+}
 
 #if KERNEL_VER_GTE(5, 6, 0)
 void __init defex_bootconfig_setup(void)
@@ -130,15 +149,21 @@ static int defex_reboot_notifier(struct notifier_block *nb, unsigned long action
 	(void)nb;
 	(void)action;
 	(void)unused;
-	is_reboot_pending = true;
+	atomic_set(&reboot_pending, 1);
 	return NOTIFY_DONE;
 }
 
+bool is_reboot_pending(void)
+{
+	return atomic_read(&reboot_pending) == 0 ? false : true;
+}
 
 //INIT/////////////////////////////////////////////////////////////////////////
 __visible_for_testing int __init defex_lsm_init(void)
 {
 	int ret;
+
+	defex_init_features();
 
 #ifdef DEFEX_CACHES_ENABLE
 	defex_file_cache_init();
@@ -178,7 +203,7 @@ __visible_for_testing int __init defex_lsm_init(void)
 
 __visible_for_testing int __init defex_lsm_load(void)
 {
-	if (!boot_state_unlocked && defex_init_done)
+	if (!is_boot_state_unlocked() && defex_init_done)
 		do_load_rules();
 	return 0;
 }

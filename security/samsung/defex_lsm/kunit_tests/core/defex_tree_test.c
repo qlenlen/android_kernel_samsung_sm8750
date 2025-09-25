@@ -83,7 +83,7 @@ static void check_current_path(char *current_path,
 	is_system = ((strncmp("/system/", current_path, 8) == 0) ||
 			(strncmp("/product/", current_path, 9) == 0) ||
 			(strncmp("/apex/", current_path, 6) == 0) ||
-			(strncmp("/system_ext/", current_path, 12) == 0)) ? 1 : 0;
+			(strncmp("/system_ext/", current_path, 12) == 0));
 
 	/* feature_is_file set */
 	attr = get_first_feature(feature_flags & feature_is_file);
@@ -143,7 +143,8 @@ static void find_paths(struct d_tree *the_tree, struct d_tree_item *parent_node,
 			current_path[path_len] = '/';
 			memcpy(current_path + path_len + 1, node_name, name_size);
 
-			check_current_path(current_path, child_node->features, path_len + name_size + 1);
+			check_current_path(current_path, child_node->features,
+							path_len + name_size + 1);
 			find_paths(the_tree, child_node, current_path, path_len + name_size + 1);
 			current_path[path_len] = 0;
 		}

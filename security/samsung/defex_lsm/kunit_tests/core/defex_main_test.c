@@ -21,6 +21,7 @@
 #include <linux/uidgid.h>
 #include <linux/version.h>
 #include "include/defex_catch_list.h"
+#include "include/defex_config.h"
 #include "include/defex_internal.h"
 #include "include/defex_rules.h"
 #include "include/defex_test.h"

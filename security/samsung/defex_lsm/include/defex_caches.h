@@ -31,7 +31,6 @@ struct defex_file_cache_list {
 void defex_file_cache_init(void);
 void defex_file_cache_add(int pid, struct file *file_addr);
 void defex_file_cache_update(struct file *file_addr);
-void defex_file_cache_delete(int pid);
-struct file *defex_file_cache_find(int pid);
+struct file *defex_file_cache_find(int pid,  bool need_to_delete);
 
 #endif /* __DEFEX_CACHES_H */

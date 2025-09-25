@@ -74,29 +74,6 @@ struct kdp_init {
 	} selinux;
 };
 
-extern bool kdp_enable;
-extern void __init kdp_init(void);
-extern int get_kdp_kmem_cache_type(const char *name);
-extern bool is_kdp_kmem_cache(struct kmem_cache *s);
-extern bool is_kdp_kmem_cache_name(const char *name);
-
-static inline void kdp_set_freeptr(u64 object, u64 offset, u64 fp, u64 freelist_ptr)
-{
-	uh_call(UH_APP_KDP, SET_FREEPTR, object, offset, fp, freelist_ptr);
-}
-
-static inline void kdp_set_slab_ro(u64 addr, u64 type)
-{
-	uh_call(UH_APP_KDP, SET_SLAB_RO, addr, type, 0, 0);
-}
-
-static inline void kdp_pgd_rwx(u64 addr)
-{
-	uh_call(UH_APP_KDP, PGD_RWX, addr, 0, 0, 0);
-}
-
-#ifdef CONFIG_KDP
-/***************** KDP_CRED *****************/
 struct ro_rcu_head {
 	/* RCU deletion */
 	union {
@@ -119,20 +96,40 @@ struct cred_param {
 	};
 };
 
-#define PROTECT_INIT 1
-#define PROTECT_KMEM 2
+struct cred_kdp_init {
+	atomic_long_t use_cnt;
+	struct ro_rcu_head ro_rcu_head_init;
+};
 
+extern bool kdp_enable;
+extern void __init kdp_init(void);
+extern int get_kdp_kmem_cache_type(const char *name);
+extern bool is_kdp_kmem_cache(struct kmem_cache *s);
+extern bool is_kdp_kmem_cache_name(const char *name);
+extern struct cred_kdp init_cred_kdp;
+
+static inline void kdp_set_freeptr(u64 object, u64 offset, u64 fp, u64 freelist_ptr)
+{
+	uh_call(UH_APP_KDP, SET_FREEPTR, object, offset, fp, freelist_ptr);
+}
+
+static inline void kdp_set_slab_ro(u64 addr, u64 type)
+{
+	uh_call(UH_APP_KDP, SET_SLAB_RO, addr, type, 0, 0);
+}
+
+static inline void kdp_pgd_rwx(u64 addr)
+{
+	uh_call(UH_APP_KDP, PGD_RWX, addr, 0, 0, 0);
+}
+
+/***************** KDP_CRED *****************/
 #define GET_ROCRED_RCU(cred) \
 ( \
-	((u64)cred == (u64)&init_cred) ? \
-		(struct ro_rcu_head *)((atomic_long_t *)init_cred_kdp.use_cnt + 1) : \
 		(struct ro_rcu_head *)((atomic_long_t *)((struct cred_kdp *)cred)->use_cnt + 1) \
 )
 
-extern struct cred init_cred;
-extern struct cred_kdp init_cred_kdp;
 extern struct task_security_struct init_sec;
-struct filename;
 
 extern void __init kdp_cred_init(void);
 extern void __init kdp_do_early_param_setup(char *param, char *val);
@@ -163,7 +160,6 @@ static inline void kdp_set_cred_pgd(u64 current_cred, struct mm_struct *mm)
 	if (kdp_enable)
 		uh_call(UH_APP_KDP, SET_CRED_PGD, (u64)current_cred, (u64)mm->pgd, 0, 0);
 }
-#endif /* CONFIG_KDP */
 
 #endif //__ASSEMBLY__
 #endif //__KDP_H__

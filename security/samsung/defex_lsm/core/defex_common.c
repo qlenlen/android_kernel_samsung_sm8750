@@ -273,7 +273,7 @@ struct file *defex_get_source_file(struct task_struct *p)
 #ifdef DEFEX_CACHES_ENABLE
 	bool self;
 
-	file_addr = defex_file_cache_find(p->pid);
+	file_addr = defex_file_cache_find(p->pid, false);
 
 	if (!file_addr) {
 		proc_mm = get_task_mm(p);

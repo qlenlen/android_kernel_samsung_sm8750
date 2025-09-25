@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 #undef TRACE_SYSTEM
 #define TRACE_SYSTEM ngksm
-
+#undef TRACE_INCLUDE_PATH
 #define TRACE_INCLUDE_PATH trace/hooks
 
 #if !defined(_TRACE_HOOK_NGKSM_H) || defined(TRACE_HEADER_MULTI_READ)

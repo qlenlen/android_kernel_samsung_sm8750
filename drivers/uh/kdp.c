@@ -95,32 +95,6 @@ static int __init boot_recovery(char *str)
 }
 early_param("androidboot.boot_recovery", boot_recovery);
 
-/*------------------------------------------------
- * CRED
- *------------------------------------------------
- */
-struct cred_kdp_init {
-	atomic_long_t use_cnt;
-	struct ro_rcu_head ro_rcu_head_init;
-};
-
-struct cred_kdp_init init_cred_use_cnt = {
-	.use_cnt = ATOMIC_LONG_INIT(4),
-	.ro_rcu_head_init = {
-		.non_rcu = 0,
-		.bp_cred = NULL,
-	},
-};
-
-struct cred_kdp init_cred_kdp __kdp_ro = {
-//struct cred_kdp init_cred_kdp  = {
-	.use_cnt = (atomic_long_t *)&init_cred_use_cnt,
-	.bp_task = &init_task,
-	.bp_pgd	= NULL,
-	.type = 0,
-};
-
-
 /* Dummy constructor to make sure we have separate slabs caches. */
 static void cred_ctor(void *data) {}
 static void sec_ctor(void *data) {}
@@ -158,11 +132,7 @@ void __init kdp_cred_init(void)
 
 unsigned int kdp_get_usecount(struct cred *cred)
 {
-	int ret = is_kdp_protect_addr((unsigned long)cred);
-
-	if (ret == PROTECT_INIT)
-		return (unsigned int)atomic_long_read(init_cred_kdp.use_cnt);
-	else if (ret == PROTECT_KMEM)
+	if (is_kdp_protect_addr((unsigned long)cred))
 		return (unsigned int)atomic_long_read(((struct cred_kdp *)cred)->use_cnt);
 	else
 		return atomic_long_read(&cred->usage);
@@ -170,11 +140,7 @@ unsigned int kdp_get_usecount(struct cred *cred)
 
 void kdp_usecount_inc(struct cred *cred)
 {
-	int ret = is_kdp_protect_addr((unsigned long)cred);
-
-	if (ret == PROTECT_INIT)
-		atomic_long_inc(init_cred_kdp.use_cnt);
-	else if (ret == PROTECT_KMEM)
+	if (is_kdp_protect_addr((unsigned long)cred))
 		atomic_long_inc(((struct cred_kdp *)cred)->use_cnt);
 	else
 		atomic_long_inc(&cred->usage);
@@ -183,11 +149,7 @@ EXPORT_SYMBOL(kdp_usecount_inc);
 
 unsigned int kdp_usecount_inc_not_zero(struct cred *cred)
 {
-	int ret = is_kdp_protect_addr((unsigned long)cred);
-
-	if (ret == PROTECT_INIT)
-		return (unsigned int)atomic_long_inc_not_zero(init_cred_kdp.use_cnt);
-	else if (ret == PROTECT_KMEM)
+	if (is_kdp_protect_addr((unsigned long)cred))
 		return (unsigned int)atomic_long_inc_not_zero(((struct cred_kdp *)cred)->use_cnt);
 	else
 		return atomic_long_inc_not_zero(&cred->usage);
@@ -195,11 +157,7 @@ unsigned int kdp_usecount_inc_not_zero(struct cred *cred)
 
 unsigned int kdp_usecount_dec_and_test(struct cred *cred)
 {
-	int ret = is_kdp_protect_addr((unsigned long)cred);
-
-	if (ret == PROTECT_INIT)
-		return (unsigned int)atomic_long_dec_and_test(init_cred_kdp.use_cnt);
-	else if (ret == PROTECT_KMEM)
+	if (is_kdp_protect_addr((unsigned long)cred))
 		return (unsigned int)atomic_long_dec_and_test(((struct cred_kdp *)cred)->use_cnt);
 	else
 		return atomic_long_dec_and_test(&cred->usage);
@@ -237,15 +195,14 @@ int is_kdp_protect_addr(unsigned long addr)
 	if (!kdp_enable)
 		return 0;
 
-	if ((addr == ((unsigned long)&init_cred)) ||
-		(addr == ((unsigned long)&init_sec)))
-		return PROTECT_INIT;
+	if (addr == (unsigned long)&init_cred_kdp || addr == (unsigned long)&init_sec)
+		return 1;
 
 	page = virt_to_head_page(objp);
 	p_slab = page_slab(page);
 	s = p_slab->slab_cache;
 	if (s && (s == cred_jar_ro || s == tsec_jar))
-		return PROTECT_KMEM;
+		return 1;
 
 	return 0;
 }
@@ -299,9 +256,9 @@ void kdp_put_cred_rcu(struct cred *cred, void *put_cred_rcu)
 struct cred *prepare_ro_creds(struct cred *old, int kdp_cmd, u64 p)
 {
 	u64 pgd = (u64)(current->mm ? current->mm->pgd : swapper_pg_dir);
-	struct cred_kdp temp_old __aligned(256);
+	struct cred_kdp temp_old __aligned(roundup_pow_of_two(sizeof(struct cred_kdp)));
 	struct cred_kdp *new_ro = NULL;
-	struct cred_param param_data __aligned(64);
+	struct cred_param param_data __aligned(roundup_pow_of_two(sizeof(struct cred_param)));
 	void *use_cnt_ptr = NULL;
 	void *rcu_ptr = NULL;
 	void *tsec = NULL;
@@ -322,16 +279,9 @@ struct cred *prepare_ro_creds(struct cred *old, int kdp_cmd, u64 p)
 	if (!tsec)
 		panic("[%d] : Unable to allocate security pointer\n", kdp_cmd);
 
-	// make cred_kdp 'temp_old'
-	if ((u64)current->cred == (u64)&init_cred)
-		memcpy(&temp_old, &init_cred_kdp, sizeof(struct cred_kdp));
-	else
-		memcpy(&temp_old, current->cred, sizeof(struct cred_kdp));
-
 	memcpy(&temp_old, old, sizeof(struct cred));
 
 	// init
-	memset((void *)&param_data, 0, sizeof(struct cred_param));
 	param_data.cred = &temp_old;
 	param_data.cred_ro = new_ro;
 	param_data.use_cnt_ptr = use_cnt_ptr;
@@ -340,7 +290,7 @@ struct cred *prepare_ro_creds(struct cred *old, int kdp_cmd, u64 p)
 	param_data.use_cnt = (u64)p;
 
 	uh_call(UH_APP_KDP, PREPARE_RO_CRED, (u64)&param_data,
-				(u64)current, (u64)&init_cred, (u64)&init_cred_kdp);
+				(u64)current, (u64)&init_cred_kdp, (u64)&init_cred_kdp);
 	if (kdp_cmd == CMD_COPY_CREDS) {
 		if ((new_ro->bp_task != (void *)p) ||
 			new_ro->cred.security != tsec ||
@@ -441,12 +391,8 @@ void kdp_assign_pgd(struct task_struct *p)
 void set_rocred_ucounts(struct cred *cred, struct ucounts *new_ucounts)
 {
 	if (is_kdp_protect_addr((u64)cred)) {
-		if (cred == &init_cred)
-			uh_call(UH_APP_KDP, SET_CRED_UCOUNTS, (u64)cred,
-				(u64)&init_cred, (u64)&(init_cred.ucounts), (u64)new_ucounts);
-		else
-			uh_call(UH_APP_KDP, SET_CRED_UCOUNTS, (u64)cred, (u64)&init_cred,
-				(u64)&(cred->ucounts), (u64)new_ucounts);
+		uh_call(UH_APP_KDP, SET_CRED_UCOUNTS, (u64)cred, (u64)&init_cred_kdp,
+			(u64)&(cred->ucounts), (u64)new_ucounts);
 	} else {
 		cred->ucounts = new_ucounts;
 	}
@@ -456,43 +402,19 @@ struct task_security_struct init_sec __kdp_ro;
 static inline unsigned int
 	cmp_sec_integrity(const struct cred *cred, struct mm_struct *mm)
 {
-	if (cred == &init_cred) {
-		if (init_cred_kdp.bp_task != current)
-			pr_err("[KDP] init_cred_kdp.bp_task: 0x%lx, current: 0x%lx\n",
-				(unsigned long) init_cred_kdp.bp_task, (unsigned long) current);
+	if (((struct cred_kdp *)cred)->bp_task != current)
+		pr_err("[KDP] cred->bp_task: %p, current: %s:%p\n",
+				((struct cred_kdp *)cred)->bp_task, current->comm, current);
 
-		if (mm && (init_cred_kdp.bp_pgd != swapper_pg_dir) &&
-					(init_cred_kdp.bp_pgd != mm->pgd))
-			pr_err("[KDP] mm: 0x%lx, init_cred_kdp.bp_pgd: 0x%lx, swapper_pg_dir: %p, mm->pgd: 0x%lx\n",
-					(unsigned long) mm, (unsigned long) init_cred_kdp.bp_pgd,
-					swapper_pg_dir, (unsigned long) mm->pgd);
+	if (mm && (((struct cred_kdp *)cred)->bp_pgd != swapper_pg_dir) &&
+		(((struct cred_kdp *)cred)->bp_pgd != mm->pgd))
+		pr_err("[KDP] mm: %p, cred->bp_pgd: %p, swapper_pg_dir: %p, mm->pgd: %p\n",
+				mm, ((struct cred_kdp *)cred)->bp_pgd, swapper_pg_dir, mm->pgd);
 
-		return ((init_cred_kdp.bp_task != current) ||
-				(mm && (!(in_interrupt() || in_softirq())) &&
-				(init_cred_kdp.bp_pgd != swapper_pg_dir) &&
-				(init_cred_kdp.bp_pgd != mm->pgd)));
-	} else {
-		if (((struct cred_kdp *)cred)->bp_task != current)
-			pr_err("[KDP] cred->bp_task: 0x%lx, current: %s:0x%lx\n",
-					(unsigned long) ((struct cred_kdp *)cred)->bp_task,
-					current->comm,
-					(unsigned long)current);
-
-		if (mm && (((struct cred_kdp *)cred)->bp_pgd != swapper_pg_dir) &&
-			(((struct cred_kdp *)cred)->bp_pgd != mm->pgd))
-			pr_err("[KDP] mm: 0x%lx, cred->bp_pgd: 0x%lx, swapper_pg_dir: %p, mm->pgd: 0x%lx\n",
-						(unsigned long) mm,
-						(unsigned long) ((struct cred_kdp *)cred)->bp_pgd,
-						swapper_pg_dir,
-						(unsigned long) mm->pgd);
-
-		return ((((struct cred_kdp *)cred)->bp_task != current) ||
-				(mm && (!(in_interrupt() || in_softirq())) &&
-				(((struct cred_kdp *)cred)->bp_pgd != swapper_pg_dir) &&
-				(((struct cred_kdp *)cred)->bp_pgd != mm->pgd)));
-	}
-	// Want to not reaching
-	return 1;
+	return ((((struct cred_kdp *)cred)->bp_task != current) ||
+			(mm && (!(in_interrupt() || in_softirq())) &&
+			(((struct cred_kdp *)cred)->bp_pgd != swapper_pg_dir) &&
+			(((struct cred_kdp *)cred)->bp_pgd != mm->pgd)));
 }
 
 static inline bool is_kdp_invalid_cred_sp(u64 cred, u64 sec_ptr)
@@ -501,10 +423,7 @@ static inline bool is_kdp_invalid_cred_sp(u64 cred, u64 sec_ptr)
 	u64 cred_size = sizeof(struct cred_kdp);
 	u64 tsec_size = sizeof(struct task_security_struct);
 
-	if (cred == (u64)&init_cred)
-		cred_size = sizeof(struct cred);
-
-	if ((cred == (u64)&init_cred) && (sec_ptr == (u64)&init_sec))
+	if ((cred == (u64)&init_cred_kdp) && (sec_ptr == (u64)&init_sec))
 		return false;
 
 	if (!is_kdp_protect_addr(cred) ||
@@ -520,8 +439,8 @@ static inline bool is_kdp_invalid_cred_sp(u64 cred, u64 sec_ptr)
 	}
 
 	if ((u64)tsec->bp_cred != cred) {
-		pr_err("[KDP] %s: tesc->bp_cred: %lx, cred: %lx\n",
-				__func__, (unsigned long)tsec->bp_cred, (unsigned long)cred);
+		pr_err("[KDP] %s: tesc->bp_cred: %p, cred: %p\n",
+				__func__, tsec->bp_cred, (void *)cred);
 		return true;
 	}
 

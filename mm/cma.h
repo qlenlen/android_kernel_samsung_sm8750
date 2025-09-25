@@ -31,8 +31,6 @@ struct cma {
 	struct cma_kobject *cma_kobj;
 #endif
 	bool reserve_pages_on_error;
-	bool late_activate;
-	bool late_activate_done;
 };
 
 extern struct cma cma_areas[MAX_CMA_AREAS];

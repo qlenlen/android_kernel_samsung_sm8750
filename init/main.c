@@ -110,6 +110,7 @@
 #ifdef CONFIG_RKP
 #include <linux/rkp.h>
 #endif
+
 #ifdef CONFIG_KDP
 #include <linux/kdp.h>
 #endif
@@ -614,7 +615,6 @@ static int __init rdinit_setup(char *str)
 __setup("rdinit=", rdinit_setup);
 
 #ifndef CONFIG_SMP
-static const unsigned int setup_max_cpus = NR_CPUS;
 static inline void setup_nr_cpu_ids(void) { }
 static inline void smp_prepare_cpus(unsigned int maxcpus) { }
 #endif
@@ -952,7 +952,7 @@ void start_kernel(void)
 
 	/* trace_printk can be enabled here */
 	early_trace_init();
-	
+
 #ifdef CONFIG_KDP
 	kdp_enable = true;
 #endif

@@ -491,6 +491,11 @@ int thermal_zone_device_is_enabled(struct thermal_zone_device *tz)
 	return tz->mode == THERMAL_DEVICE_ENABLED;
 }
 
+static bool thermal_zone_is_present(struct thermal_zone_device *tz)
+{
+	return !list_empty(&tz->node);
+}
+
 #define MAX_CDEV	50
 #define MAX_CDEV_NAME	30
 #define MAX_BUF_LEN	512
@@ -519,7 +524,7 @@ static void release_prev_cdev(struct thermal_cooling_device *cdev)
 
 	for (i = 0; i < restricted_cdev_count; i++) {
 		if (!is_valid_cdev(i)) {
-			pr_err("%s: prev_cdevs[%d].cdev is NULL or invalid pointer, restricted_cdev_count(%d)\n",
+			pr_err("%s: cdev(%d) is invalid, restricted count(%d)\n",
 					__func__, i, restricted_cdev_count);
 			continue;
 		}
@@ -554,7 +559,7 @@ void restrict_prev_cdev(struct thermal_cooling_device *cdev, unsigned long targe
 
 	for (i = 0; i < restricted_cdev_count; i++) {
 		if (!is_valid_cdev(i)) {
-			pr_err("%s: prev_cdevs[%d].cdev is NULL or invalid pointer, restricted_cdev_count(%d)\n",
+			pr_err("%s: cdev(%d) is invalid, restricted count(%d)\n",
 					__func__, i, restricted_cdev_count);
 			continue;
 		}
@@ -615,7 +620,7 @@ void thermal_zone_device_update(struct thermal_zone_device *tz,
 				enum thermal_notify_event event)
 {
 	mutex_lock(&tz->lock);
-	if (device_is_registered(&tz->device))
+	if (thermal_zone_is_present(tz))
 		__thermal_zone_device_update(tz, event);
 	mutex_unlock(&tz->lock);
 }
@@ -1416,6 +1421,7 @@ thermal_zone_device_register_with_trips(const char *type, struct thermal_trip *t
 	}
 
 	INIT_LIST_HEAD(&tz->thermal_instances);
+	INIT_LIST_HEAD(&tz->node);
 	ida_init(&tz->ida);
 	mutex_init(&tz->lock);
 	id = ida_alloc(&thermal_tz_ida, GFP_KERNEL);
@@ -1453,6 +1459,7 @@ thermal_zone_device_register_with_trips(const char *type, struct thermal_trip *t
 		thermal_zone_destroy_device_groups(tz);
 		goto remove_id;
 	}
+	thermal_zone_device_init(tz);
 	result = device_register(&tz->device);
 	if (result)
 		goto release_device;
@@ -1488,7 +1495,9 @@ thermal_zone_device_register_with_trips(const char *type, struct thermal_trip *t
 	}
 
 	mutex_lock(&thermal_list_lock);
+	mutex_lock(&tz->lock);
 	list_add_tail(&tz->node, &thermal_tz_list);
+	mutex_unlock(&tz->lock);
 	mutex_unlock(&thermal_list_lock);
 
 	/* Bind cooling devices for this zone */
@@ -1496,7 +1505,6 @@ thermal_zone_device_register_with_trips(const char *type, struct thermal_trip *t
 
 	INIT_DELAYED_WORK(&tz->poll_queue, thermal_zone_device_check);
 
-	thermal_zone_device_init(tz);
 	/* Update the new thermal zone and mark it as already updated. */
 	if (atomic_cmpxchg(&tz->need_update, 1, 0))
 		thermal_zone_device_update(tz, THERMAL_EVENT_UNSPECIFIED);
@@ -1578,7 +1586,10 @@ void thermal_zone_device_unregister(struct thermal_zone_device *tz)
 		mutex_unlock(&thermal_list_lock);
 		return;
 	}
+
+	mutex_lock(&tz->lock);
 	list_del(&tz->node);
+	mutex_unlock(&tz->lock);
 
 	/* Unbind all cdevs associated with 'this' thermal zone */
 	list_for_each_entry(cdev, &thermal_cdev_list, node)
@@ -1595,9 +1606,7 @@ void thermal_zone_device_unregister(struct thermal_zone_device *tz)
 	ida_free(&thermal_tz_ida, tz->id);
 	ida_destroy(&tz->ida);
 
-	mutex_lock(&tz->lock);
 	device_del(&tz->device);
-	mutex_unlock(&tz->lock);
 
 	kfree(tz->tzp);
 
@@ -1651,24 +1660,25 @@ static char *prev_cdevs_buf_ptr;
 
 static void prev_cdev_print(void)
 {
-	int i;
+	int i, len = 0;
 
 	prev_cdevs_buf_ptr = prev_cdevs_buf;
-	prev_cdevs_buf_ptr += sprintf(prev_cdevs_buf_ptr, "");
+	len += scnprintf(prev_cdevs_buf_ptr + len, MAX_BUF_LEN - len, "");
 
 	for (i = 0; i < restricted_cdev_count; i++) {
 		if (!is_valid_cdev(i)) {
-			pr_err("%s: prev_cdevs[%d].cdev is NULL or invalid pointer, restricted_cdev_count(%d)\n",
-					__func__, i, restricted_cdev_count);
+			pr_err("%s: cdev(%d) is invalid, restricted count(%d)\n",
+				__func__, i, restricted_cdev_count);
 			continue;
 		}
 
 		/* Logging only when is_end is true */
 		if (prev_cdevs[i].is_end) {
 			pr_debug("%s: cdev type(%s), target(%ld)\n",
-					__func__, prev_cdevs[i].cdev->type, prev_cdevs[i].target);
+				__func__, prev_cdevs[i].cdev->type, prev_cdevs[i].target);
 
-			prev_cdevs_buf_ptr += sprintf(prev_cdevs_buf_ptr, "[%s:%ld, %lld.%03llds]",
+			len += scnprintf(prev_cdevs_buf_ptr + len, MAX_BUF_LEN - len,
+				"[%s:%ld, %lld.%03llds]",
 				prev_cdevs[i].cdev->type, prev_cdevs[i].target,
 				prev_cdevs[i].accumulated / MSEC_PER_SEC,
 				prev_cdevs[i].accumulated % MSEC_PER_SEC);

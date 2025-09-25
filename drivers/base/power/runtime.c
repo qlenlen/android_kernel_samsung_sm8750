@@ -11,9 +11,7 @@
 #include <linux/export.h>
 #include <linux/pm_runtime.h>
 #include <linux/pm_wakeirq.h>
-#include <linux/of.h>
 #include <trace/events/rpm.h>
-#include <linux/cx_gdsc_debug.h>
 
 #include "../base.h"
 #include "power.h"
@@ -134,10 +132,6 @@ static void pm_runtime_deactivate_timer(struct device *dev)
 	if (dev->power.timer_expires > 0) {
 		hrtimer_try_to_cancel(&dev->power.suspend_timer);
 		dev->power.timer_expires = 0;
-
-		if (of_device_is_compatible(dev->of_node, "qcom,adreno-smmu"))
-			cx_gdsc_log("%s: name: %s, timer_cancel\n",
-				__func__, dev_name(dev));
 	}
 }
 
@@ -571,9 +565,6 @@ static int rpm_suspend(struct device *dev, int rpmflags)
 
 	trace_rpm_suspend(dev, rpmflags);
 
-	if (of_device_is_compatible(dev->of_node, "qcom,adreno-smmu") && !(rpmflags & RPM_GET_PUT))
-		cx_gdsc_log("%s: name: %s, flags: %d, usage_count: %d, disable_depth: %d, runtime_auto: %d, request_pending: %d, irq_safe: %d, child_count: %d runtime_error %d status %d\n", __func__, dev_name(dev), rpmflags, atomic_read(&dev->power.usage_count), dev->power.disable_depth, dev->power.runtime_auto, dev->power.request_pending, dev->power.irq_safe, atomic_read(&dev->power.child_count), dev->power.runtime_error, dev->power.runtime_status);
-
  repeat:
 	retval = rpm_check_suspend_allowed(dev);
 	if (retval < 0)
@@ -615,10 +606,6 @@ static int rpm_suspend(struct device *dev, int rpmflags)
 						       ns_to_ktime(expires),
 						       slack,
 						       HRTIMER_MODE_ABS);
-
-				if (of_device_is_compatible(dev->of_node, "qcom,adreno-smmu"))
-					cx_gdsc_log("%s: name: %s, timer_expires: %lld\n",
-						__func__, dev_name(dev), expires);
 			}
 			dev->power.timer_autosuspends = 1;
 			goto out;
@@ -780,9 +767,6 @@ static int rpm_resume(struct device *dev, int rpmflags)
 	int retval = 0;
 
 	trace_rpm_resume(dev, rpmflags);
-
-	if (of_device_is_compatible(dev->of_node, "qcom,adreno-smmu"))
-		cx_gdsc_log("%s: name: %s, flags: %d, usage_count: %d, disable_depth: %d, runtime_auto: %d, request_pending: %d, irq_safe: %d, child_count: %d runtime_error: %d\n", __func__, dev_name(dev), rpmflags, atomic_read(&dev->power.usage_count), dev->power.disable_depth, dev->power.runtime_auto, dev->power.request_pending, dev->power.irq_safe, atomic_read(&dev->power.child_count), dev->power.runtime_error);
 
  repeat:
 	if (dev->power.runtime_error) {
@@ -1010,19 +994,10 @@ static enum hrtimer_restart  pm_suspend_timer_fn(struct hrtimer *timer)
 	struct device *dev = container_of(timer, struct device, power.suspend_timer);
 	unsigned long flags;
 	u64 expires;
-	u64 val;
 
 	spin_lock_irqsave(&dev->power.lock, flags);
 
 	expires = dev->power.timer_expires;
-	val = ktime_get_mono_fast_ns();
-	if (expires > 0 && expires >= val){
-		cx_gdsc_log("%s: name: %s ktime_mono: %llu expires: %llu, timer.softexpires: %llu timer.expires: %llu\n",
-			__func__, dev_name(dev),
-			val, expires,
-			ktime_to_ns(hrtimer_get_softexpires(timer)),
-			ktime_to_ns(hrtimer_get_expires(timer)));
-	}
 	if (expires > 0) {
 		dev->power.timer_expires = 0;
 		rpm_suspend(dev, dev->power.timer_autosuspends ?
@@ -1088,12 +1063,6 @@ static int rpm_drop_usage_count(struct device *dev)
 	atomic_inc(&dev->power.usage_count);
 	dev_warn(dev, "Runtime PM usage count underflow!\n");
 	return -EINVAL;
-}
-
-static inline void __maybe_unused trace_rpm_usage_custom(struct device *dev, int rpmflags)
-{
-	if (of_device_is_compatible(dev->of_node, "qcom,adreno-smmu"))
-		cx_gdsc_log("%s: name: %s, flags: %d, usage_count: %d, disable_depth: %d, runtime_auto: %d, request_pending: %d, irq_safe: %d, child_count: %d \n", __func__, dev_name(dev), rpmflags, atomic_read(&dev->power.usage_count), dev->power.disable_depth, dev->power.runtime_auto, dev->power.request_pending, dev->power.irq_safe, atomic_read(&dev->power.child_count));
 }
 
 /**

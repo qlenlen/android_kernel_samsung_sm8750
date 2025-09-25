@@ -10,6 +10,8 @@
 #ifndef _INCLUDE_DTM_LOG_H
 #define _INCLUDE_DTM_LOG_H
 
+#include "include/defex_internal.h"
+
 #define DTM_TAG "[DTM] "
 #define DTM_LOG_INFO(format, ...) pr_info(DTM_TAG format, ##__VA_ARGS__)
 #define DTM_LOG_ERROR(format, ...) pr_err(DTM_TAG format, ##__VA_ARGS__)
@@ -21,6 +23,11 @@ extern noinline void dtm_report_violation(const char *feature_code,
 					  struct dtm_context *context);
 
 #ifdef DEFEX_DEBUG_ENABLE
+
+static inline int defex_tm_mode_enabled(int mode_flag)
+{
+	return defex_get_features() & mode_flag;
+}
 
 #define DTM_DEBUG(mode, format, ...)					\
 	do {								\

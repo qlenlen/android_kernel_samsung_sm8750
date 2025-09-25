@@ -27,25 +27,8 @@ extern ssize_t debug_store(struct kobject *kobj, struct kobj_attribute *attr,
 		const char *buf, size_t count);
 extern ssize_t debug_show(struct kobject *kobj, struct kobj_attribute *attr,
 		char *buf);
-
-/* -------------------------------------------------------------------------- */
-/* defex_immutable */
-/* -------------------------------------------------------------------------- */
-
-extern int immutable_status_store(const char *status_str);
-
-/* -------------------------------------------------------------------------- */
-/* defex_priv */
-/* -------------------------------------------------------------------------- */
-
-extern int privesc_status_store(const char *status_str);
-
-/* -------------------------------------------------------------------------- */
-/* defex_safeplace */
-/* -------------------------------------------------------------------------- */
-
-extern int safeplace_status_store(const char *status_str);
-
+extern int set_feature_status(const char *status_str,
+		unsigned int feature, unsigned int feature_soft);
 /* -------------------------------------------------------------------------- */
 /* defex_main */
 /* -------------------------------------------------------------------------- */
@@ -65,7 +48,7 @@ extern long kill_process(struct task_struct *p);
 #endif
 
 #ifdef DEFEX_PED_ENABLE
-extern long kill_process_group(struct task_struct *p, int tgid, int pid);
+extern long kill_process_group(int tgid);
 extern int task_defex_is_secured(struct defex_context *dc);
 extern int at_same_group(unsigned int uid1, unsigned int uid2);
 extern int at_same_group_gid(unsigned int gid1, unsigned int gid2);

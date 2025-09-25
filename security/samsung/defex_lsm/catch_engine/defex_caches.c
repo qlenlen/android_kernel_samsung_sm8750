@@ -80,7 +80,7 @@ void defex_file_cache_update(struct file *file_addr)
 		fput(old_file_addr);
 }
 
-void defex_file_cache_delete(int pid)
+struct file *defex_file_cache_find(int pid, bool need_to_delete)
 {
 	int current_index, cache_found = 0;
 	struct defex_file_cache_entry *current_entry;
@@ -93,14 +93,20 @@ void defex_file_cache_delete(int pid)
 	do {
 		current_entry = &file_cache.entry[current_index];
 		if (current_entry->pid == pid) {
-
 			if (current_index == file_cache.first_entry) {
-				file_cache.first_entry = current_entry->next_entry;
-				file_cache.last_entry = current_index;
+				if (need_to_delete) {
+					file_cache.first_entry = current_entry->next_entry;
+					file_cache.last_entry = current_index;
+				}
 				cache_found = 1;
 				break;
 			}
 			if (current_index == file_cache.last_entry) {
+				if (!need_to_delete) {
+					current_entry->next_entry = file_cache.first_entry;
+					file_cache.first_entry = file_cache.last_entry;
+					file_cache.last_entry = current_entry->prev_entry;
+				}
 				cache_found = 1;
 				break;
 			}
@@ -114,7 +120,10 @@ void defex_file_cache_delete(int pid)
 			current_entry->next_entry = file_cache.first_entry;
 			current_entry->prev_entry = file_cache.last_entry;
 
-			file_cache.last_entry = current_index;
+			if (need_to_delete)
+				file_cache.last_entry = current_index;
+			else
+				file_cache.first_entry = current_index;
 
 			cache_found = 1;
 			break;
@@ -122,59 +131,16 @@ void defex_file_cache_delete(int pid)
 		current_index = current_entry->next_entry;
 	} while (current_index != file_cache.first_entry);
 
-	if (cache_found) {
+	if (need_to_delete && cache_found) {
 		old_file_addr = current_entry->file_addr;
 		current_entry->pid = -1;
 		current_entry->file_addr = NULL;
 	}
 
 	spin_unlock_irqrestore(&defex_caches_lock, flags);
-	if (old_file_addr)
+
+	if (need_to_delete && old_file_addr)
 		fput(old_file_addr);
-}
-
-struct file *defex_file_cache_find(int pid)
-{
-	int current_index, cache_found = 0;
-	struct defex_file_cache_entry *current_entry;
-	unsigned long flags;
-
-	spin_lock_irqsave(&defex_caches_lock, flags);
-
-	current_index = file_cache.first_entry;
-	do {
-		current_entry = &file_cache.entry[current_index];
-		if (current_entry->pid == pid) {
-			if (current_index == file_cache.first_entry) {
-				cache_found = 1;
-				break;
-			}
-			if (current_index == file_cache.last_entry) {
-				current_entry->next_entry = file_cache.first_entry;
-				file_cache.first_entry = file_cache.last_entry;
-				file_cache.last_entry = current_entry->prev_entry;
-				cache_found = 1;
-				break;
-			}
-			file_cache.entry[current_entry->prev_entry].next_entry =
-				current_entry->next_entry;
-			file_cache.entry[current_entry->next_entry].prev_entry =
-				current_entry->prev_entry;
-			file_cache.entry[file_cache.first_entry].prev_entry = current_index;
-			file_cache.entry[file_cache.last_entry].next_entry = current_index;
-
-			current_entry->next_entry = file_cache.first_entry;
-			current_entry->prev_entry = file_cache.last_entry;
-
-			file_cache.first_entry = current_index;
-
-			cache_found = 1;
-			break;
-		}
-		current_index = current_entry->next_entry;
-	} while (current_index != file_cache.first_entry);
-
-	spin_unlock_irqrestore(&defex_caches_lock, flags);
 
 	return (!cache_found)?NULL:current_entry->file_addr;
 }

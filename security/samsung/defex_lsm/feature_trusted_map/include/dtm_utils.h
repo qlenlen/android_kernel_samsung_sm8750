@@ -14,6 +14,7 @@
 #include <linux/fs.h>
 #include <linux/sched.h>
 #include <linux/types.h>
+#include <linux/stat.h>
 #include <linux/string.h>
 
 #include "../../include/defex_internal.h"

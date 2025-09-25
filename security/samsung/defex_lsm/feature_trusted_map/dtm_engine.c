@@ -21,13 +21,6 @@
 #include "include/ptree.h"
 
 #define DTM_ANY_VALUE "*" /* wildcard value for files and arguments */
-#if defined(DEFEX_TM_DEFAULT_POLICY_ENABLE) || defined(DEFEX_GKI)
-/* Kernel-only builds don't use DEFEX's dynamic policy loading mechanism. */
-#define USE_EMBEDDED_POLICY
-static struct PPTree embedded_header;
-/* File with hardcoded policy */
-#include "dtm_engine_defaultpolicy.h"
-#endif
 
 #ifdef DEFEX_KUNIT_ENABLED
 static struct PPTree override_header, *pptree_override;
@@ -79,9 +72,6 @@ int dtm_enforce(struct dtm_context *context)
 		else
 			defex_log_warn("DTM: dynamic policy not loaded");
 		first_run = 0;
-#ifdef USE_EMBEDDED_POLICY
-		pptree_set_data(&embedded_header, dtm_engine_defaultpolicy);
-#endif
 	}
 
 	dtm_trace("Pid : %d %d", current->tgid, current->pid);
@@ -102,11 +92,7 @@ int dtm_enforce(struct dtm_context *context)
 		pptree = pptree_override;
 	else
 #endif
-#ifdef USE_EMBEDDED_POLICY /* try dynamic policy first, use embedded if not found */
-		pptree = dtm_tree.data ? &dtm_tree : &embedded_header;
-#else /* only dynamically loaded policy is acceptable */
 		pptree = &dtm_tree;
-#endif
 	if (!pptree->data) { /* Should never happen */
 		defex_log_warn("(0) TME: neither dynamic nor hardcoded rules loaded");
 		return DTM_ALLOW;
@@ -143,7 +129,7 @@ int dtm_enforce(struct dtm_context *context)
 
 	// Try exact match first
 	/* Originally, the 2nd and 3rd args to pptree_find_path below were
-	 * program_name == '/' ? program_name + 1 : program_nameand /'
+	 * "program_name == '/' ? program_name + 1 : program_name" and "'/'"
 	 * respectively. However, to keep compatibility with policy entries
 	 * which record only a program's basename, we strip the directory part
 	 * at build time, and correspondingly here test only the basename.
@@ -181,7 +167,14 @@ int dtm_enforce(struct dtm_context *context)
 	/* Check program arguments, if any */
 	pp_ctx.types |= PTREE_FIND_CONTINUE;
 	pp_ctx.types &= ~PTREE_FIND_PEEKED;
-	for (call_argc = context->callee_argc, argc = 1;
+	call_argc = context->callee_argc;
+	if (call_argc > DTM_MAX_ARGC) {
+		dtm_trace("%s'%s', caller '%s': program '%s' %d arguments: %d ignored",
+			"(8A) TME callee ", callee_path, caller_path, program_name,
+			call_argc, call_argc - DTM_MAX_ARGC);
+		call_argc = DTM_MAX_ARGC;
+	}
+	for (argc = 1;
 	     argc < call_argc && pptree_child_count(pptree, &pp_ctx);
 	     ++argc) {
 		pp_ctx.types |= PTREE_FIND_PEEK;
@@ -191,13 +184,6 @@ int dtm_enforce(struct dtm_context *context)
 			pptree_find_path(pptree, "", 0, &pp_ctx);
 			pp_ctx.types &= ~PTREE_FIND_PEEKED;
 		} else {
-			pp_ctx.types &= ~PTREE_FIND_PEEK;
-			if (pptree_find_path(pptree, DTM_ANY_VALUE, 0, &pp_ctx)) {
-				dtm_trace("(8) TME callee '%s', caller '%s', program '%s':"
-					" any arguments accepted",
-					callee_path, caller_path, program_name);
-				return DTM_ALLOW;
-			}
 			dtm_trace(
 				"(9) TMED callee '%s', caller '%s', program '%s':"
 				" argument '%s' (%d of %d) not found",
@@ -207,7 +193,6 @@ int dtm_enforce(struct dtm_context *context)
 			dtm_report_violation(DTM_ARGUMENTS_VIOLATION, context);
 			return DTM_DENY;
 		}
-#ifdef __NEVER_DEFINED__
 		if (pp_ctx.value.bits) {
 			dtm_trace("(10) TME callee '%s', caller '%s', program '%s':"
 				" argument '%s' accepts '*'",
@@ -215,7 +200,6 @@ int dtm_enforce(struct dtm_context *context)
 				argument_value ? argument_value : "(null)");
 			return DTM_ALLOW;
 		}
-#endif
 	}
 	if (call_argc > 1 && pptree_get_offset(pptree, &pp_ctx) &&
 		!pptree_find_path(pptree, DTM_ANY_VALUE, 0, &pp_ctx)) {

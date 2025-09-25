@@ -96,6 +96,9 @@ struct acc_dev {
 
 	int audio_mode;
 
+	/* synchronize access to our device file */
+	atomic_t open_excl;
+
 	struct list_head tx_idle;
 
 	wait_queue_head_t read_wq;
@@ -904,6 +907,11 @@ static int acc_open(struct inode *ip, struct file *fp)
 	if (!dev)
 		return -ENODEV;
 
+	if (atomic_xchg(&dev->open_excl, 1)) {
+		put_acc_dev(dev);
+		return -EBUSY;
+	}
+
 	dev->disconnected = false;
 	fp->private_data = dev;
 	return 0;
@@ -922,6 +930,7 @@ static int acc_release(struct inode *ip, struct file *fp)
 	dev->disconnected = true;
 
 	fp->private_data = NULL;
+	WARN_ON(!atomic_xchg(&dev->open_excl, 0));
 	put_acc_dev(dev);
 	return 0;
 }
@@ -1270,6 +1279,7 @@ static int acc_init(void)
 	spin_lock_init(&dev->lock);
 	init_waitqueue_head(&dev->read_wq);
 	init_waitqueue_head(&dev->write_wq);
+	atomic_set(&dev->open_excl, 0);
 	INIT_LIST_HEAD(&dev->tx_idle);
 	INIT_LIST_HEAD(&dev->hid_list);
 	INIT_LIST_HEAD(&dev->new_hid_list);
@@ -1290,6 +1300,14 @@ static int acc_init(void)
 	return 0;
 
 err_free_dev:
+	/*
+	 * Multiple threads might try to access the acc_dev_instance
+	 * therefore protect the failure path with spinlock to avoid race
+	 * conditions.
+	 */
+	spin_lock_irqsave(&acc_dev_instance_lock, flags);
+	acc_dev_instance = NULL;
+	spin_unlock_irqrestore(&acc_dev_instance_lock, flags);
 	kfree(dev);
 	pr_err("USB accessory gadget driver failed to initialize\n");
 	return ret;

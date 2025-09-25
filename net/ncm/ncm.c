@@ -698,7 +698,7 @@ static unsigned int hook_func_ipv6_in_conntrack(void *priv, struct sk_buff *skb,
 }
 
 /* The fuction registers to listen for packets in the post-routing chain to collect detail; */
-static void unregisternetfilterhooks(void)
+static void registernetfilterhooks(void)
 {
 	nfho_ipv4_pr_conntrack.hook = hook_func_ipv4_out_conntrack;
 	nfho_ipv4_pr_conntrack.hooknum = NF_INET_POST_ROUTING;
@@ -727,7 +727,7 @@ static void unregisternetfilterhooks(void)
 }
 
 /* The function un-registers the netfilter hook */
-static void ununregisternetfilterhooks(void)
+static void unregisternetfilterhooks(void)
 {
 	nf_unregister_net_hook(&init_net, &nfho_ipv4_pr_conntrack);
 	nf_unregister_net_hook(&init_net, &nfho_ipv6_pr_conntrack);
@@ -1001,7 +1001,7 @@ static ssize_t ncm_write(struct file *file, const char __user *buf, size_t count
 	memset(intermediate_string, '\0', sizeof(intermediate_string));
 	(void)copy_from_user(intermediate_string, buf, sizeof(intermediate_string) - 1);
 	ret = kstrtoint(intermediate_string, 10, &intermediate_value);
-	if ((ret > 0) && (intermediate_value > 0)) {
+	if ((ret == 0) && (intermediate_value > 0)) {
 		update_intermediate_timeout(intermediate_value);
 		update_intermediate_flag(intermediate_activated_flag);
 		return strlen(intermediate_string);
@@ -1026,7 +1026,7 @@ static int ncm_close(struct inode *inode, struct file *file)
 	}
 	update_ncm_flag(ncm_deactivated_flag);
 	free_kfifo();
-	ununregisternetfilterhooks();
+	unregisternetfilterhooks();
 	return SUCCESS;
 }
 
@@ -1045,7 +1045,7 @@ static long ncm_ioctl_evt(struct file *file, unsigned int cmd, unsigned long arg
 		NCM_LOGD("%s is being NCM_ACTIVATED with the ioctl command %u", __func__, cmd);
 		if (check_ncm_flag())
 			return SUCCESS;
-		unregisternetfilterhooks();
+		registernetfilterhooks();
 		initialize_kfifo();
 		initialize_ncmworkqueue();
 		update_ncm_flag(ncm_activated_flag);
@@ -1058,7 +1058,7 @@ static long ncm_ioctl_evt(struct file *file, unsigned int cmd, unsigned long arg
 			return SUCCESS;
 		update_intermediate_timeout(0);
 		update_intermediate_flag(intermediate_deactivated_flag);
-		unregisternetfilterhooks();
+		registernetfilterhooks();
 		initialize_kfifo();
 		initialize_ncmworkqueue();
 		update_ncm_flag(ncm_activated_flag);
@@ -1071,7 +1071,7 @@ static long ncm_ioctl_evt(struct file *file, unsigned int cmd, unsigned long arg
 			return SUCCESS;
 		update_intermediate_timeout(0);
 		update_intermediate_flag(intermediate_deactivated_flag);
-		unregisternetfilterhooks();
+		registernetfilterhooks();
 		initialize_kfifo();
 		initialize_ncmworkqueue();
 		update_ncm_flag(ncm_activated_flag);
@@ -1086,7 +1086,7 @@ static long ncm_ioctl_evt(struct file *file, unsigned int cmd, unsigned long arg
 		update_ncm_flow_type(NCM_FLOW_TYPE_DEFAULT);
 		update_ncm_flag(ncm_deactivated_flag);
 		free_kfifo();
-		ununregisternetfilterhooks();
+		unregisternetfilterhooks();
 		update_intermediate_timeout(0);
 		break;
 	}

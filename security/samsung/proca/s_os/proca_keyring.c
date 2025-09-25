@@ -132,6 +132,11 @@ static int proca_asymmetric_verify(const char *signature, int sig_len,
 	int ret = -ENOMEM;
 
 	key = proca_request_asymmetric_key(__be32_to_cpu(key_id));
+	if (IS_ERR(key)) {
+		ret = PTR_ERR(key);
+		PROCA_ERROR_LOG("Failed to retrieve key: %d\n", ret);
+		return ret;
+	}
 
 	memset(&pks, 0, sizeof(pks));
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/skbuff.h>
@@ -49,7 +51,7 @@ static void freecess_del_uid(uid_t uid)
 {
 	int i;
 	uid_t inner_uid;
-	
+
 	for (i = 0; i < MAX_REC_UID; i++) {
 		inner_uid = (uid_t)atomic_read(&uid_rec[i]);
 		if (inner_uid == uid) {
@@ -90,30 +92,30 @@ static int find_and_clear_uid(uid_t uid)
 	return found;
 }
 
-static void kfreecess_pkg_hook(void* data, unsigned int len)
+static void kfreecess_pkg_hook(void *data, unsigned int len)
 {
-	struct kfreecess_msg_data* payload = (struct kfreecess_msg_data*)data;
+	struct kfreecess_msg_data *payload = (struct kfreecess_msg_data *)data;
 
 	switch (payload->pkg_info.cmd) {
-		case ADD_UID:
-			freecess_add_uid(payload->pkg_info.uid);
-			break;
-		case DEL_UID:
-			freecess_del_uid(payload->pkg_info.uid);
-			break;
-		case CLEAR_ALL_UID:
-			freecess_clear_all();
-			break;
-		default:
-			break;
+	case ADD_UID:
+		freecess_add_uid(payload->pkg_info.uid);
+		break;
+	case DEL_UID:
+		freecess_del_uid(payload->pkg_info.uid);
+		break;
+	case CLEAR_ALL_UID:
+		freecess_clear_all();
+		break;
+	default:
+		break;
 	}
 
 	return;
 }
 
-static void kfreecess_cfb_hook(void* data, unsigned int len)
+static void kfreecess_cfb_hook(void *data, unsigned int len)
 {
-	struct kfreecess_msg_data* payload = (struct kfreecess_msg_data*)data;
+	struct kfreecess_msg_data *payload = (struct kfreecess_msg_data *)data;
 	int uid = payload->target_uid;
 
 	printk(KERN_INFO "cfb_target: uid = %d\n", uid);
@@ -132,9 +134,8 @@ static uid_t __sock_i_uid(struct sock *sk)
 	return 0;
 }
 
-static unsigned int freecess_ip4_in(void *priv,
-					struct sk_buff *skb,
-					const struct nf_hook_state *state)
+static unsigned int freecess_ip4_in(void *priv, struct sk_buff *skb,
+										const struct nf_hook_state *state)
 {
 	struct sock *sk;
 	uid_t uid;
@@ -146,12 +147,12 @@ static unsigned int freecess_ip4_in(void *priv,
 		return NF_ACCEPT;
 
 	sk = skb_to_full_sk(skb);
-	if (sk == NULL || !sk_fullsock(sk))
+	if (!sk || !sk_fullsock(sk))
 		return NF_ACCEPT;
 
 	uid = __sock_i_uid(sk);
 	if (uid < UID_MIN_VALUE)
-		return NF_ACCEPT;	
+		return NF_ACCEPT;
 
 	found = find_and_clear_uid(uid);
 	if (!found)
@@ -162,9 +163,8 @@ static unsigned int freecess_ip4_in(void *priv,
 	return NF_ACCEPT;
 }
 
-static unsigned int freecess_ip6_in(void *priv,
-					struct sk_buff *skb,
-					const struct nf_hook_state *state)
+static unsigned int freecess_ip6_in(void *priv, struct sk_buff *skb,
+										const struct nf_hook_state *state)
 {
 	struct sock *sk;
 	unsigned int thoff = 0;
@@ -178,10 +178,10 @@ static unsigned int freecess_ip6_in(void *priv,
 		return NF_ACCEPT;
 
 	sk = skb_to_full_sk(skb);
-	if (sk == NULL || !sk_fullsock(sk))
+	if (!sk || !sk_fullsock(sk))
 		return NF_ACCEPT;
 
-	uid = __sock_i_uid(sk);	
+	uid = __sock_i_uid(sk);
 	if (uid < UID_MIN_VALUE)
 		return NF_ACCEPT;
 
@@ -194,15 +194,13 @@ static unsigned int freecess_ip6_in(void *priv,
 	return NF_ACCEPT;
 }
 
-static inline unsigned int freecess_ip4_out(void *priv,
-					struct sk_buff *skb,
+static inline unsigned int freecess_ip4_out(void *priv, struct sk_buff *skb,
 					const struct nf_hook_state *state)
-{	
+{
 	return NF_ACCEPT;
 }
 
-static inline unsigned int freecess_ip6_out(void *priv,
-					struct sk_buff *skb,
+static inline unsigned int freecess_ip6_out(void *priv, struct sk_buff *skb,
 					const struct nf_hook_state *state)
 {
 	return NF_ACCEPT;
@@ -246,11 +244,10 @@ static int __init kfreecess_pkg_init(void)
 
 	for (i = 0; i < MAX_REC_UID; i++)
 		atomic_set(&uid_rec[i], 0);
-	
+
 	rtnl_lock();
 	for_each_net(net) {
-		ret = nf_register_net_hooks(net, freecess_nf_ops,
-						ARRAY_SIZE(freecess_nf_ops));
+		ret = nf_register_net_hooks(net, freecess_nf_ops, ARRAY_SIZE(freecess_nf_ops));
 		if (ret < 0) {
 			pr_err("nf_register_hooks(freecess hooks) error\n");
 			break;
@@ -267,7 +264,7 @@ static int __init kfreecess_pkg_init(void)
 		rtnl_unlock();
 		return -1;
 	}
-	
+
 	pr_err("nf_register_hooks(freecess hooks) success\n");
 
 	register_kfreecess_hook(MOD_PKG, kfreecess_pkg_hook);

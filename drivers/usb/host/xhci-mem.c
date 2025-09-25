@@ -35,15 +35,29 @@ static struct xhci_segment *xhci_segment_alloc(struct xhci_hcd *xhci,
 	struct xhci_segment *seg;
 	dma_addr_t	dma;
 	int		i;
-	struct device *dev = xhci_to_hcd(xhci)->self.sysdev;
+	struct device *dev;
+	if(!xhci)
+		pr_err("Utt: xhci is not ready\n");
+
+	dev = xhci_to_hcd(xhci)->self.sysdev;
 
 	seg = kzalloc_node(sizeof(*seg), flags, dev_to_node(dev));
-	if (!seg)
+	if (!seg) {
+		xhci_dbg_trace(xhci, trace_xhci_dbg_init,
+                               "utt: xhci_segment_alloc: kzalloc failed\n");
+		pr_err("utt: xhci_segment_alloc: kzalloc failed\n");
 		return NULL;
+	}
+
+	if(!xhci->segment_pool)
+		pr_err("Utt: segment pool is NULL\n");
 
 	seg->trbs = dma_pool_zalloc(xhci->segment_pool, flags, &dma);
+	xhci_dbg_trace(xhci, trace_xhci_dbg_init,
+              "utt:xhci_segment_alloc:arguments - xhci: %p, dma_pool: %p\n", xhci, seg->trbs);
 	if (!seg->trbs) {
 		kfree(seg);
+		pr_err("utt: seg->trbs is Null\n");
 		return NULL;
 	}
 
@@ -385,6 +399,10 @@ struct xhci_ring *xhci_ring_alloc(struct xhci_hcd *xhci,
 	struct xhci_ring	*ring;
 	int ret;
 	struct device *dev = xhci_to_hcd(xhci)->self.sysdev;
+ 
+	xhci_dbg_trace(xhci, trace_xhci_dbg_init,
+        "utt: xhci_ring_alloc: start (xhci: %p, num_segs: %u, cycle_state: %u, type: %u, max_packet: %u, flags: 0x%x)\n",
+           xhci, num_segs, cycle_state, type, max_packet, flags);
 
 	ring = kzalloc_node(sizeof(*ring), flags, dev_to_node(dev));
 	if (!ring)
@@ -400,8 +418,10 @@ struct xhci_ring *xhci_ring_alloc(struct xhci_hcd *xhci,
 	ret = xhci_alloc_segments_for_ring(xhci, &ring->first_seg,
 			&ring->last_seg, num_segs, 0, cycle_state, type,
 			max_packet, flags);
-	if (ret)
+	if (ret) {
+		pr_err("utt: xhci_ring_alloc: xhci_alloc_segments_for_ring failed, ret=%d\n", ret);
 		goto fail;
+	}
 
 	/* Only event ring does not use link TRB */
 	if (type != TYPE_EVENT) {
@@ -414,6 +434,7 @@ struct xhci_ring *xhci_ring_alloc(struct xhci_hcd *xhci,
 	return ring;
 
 fail:
+	pr_info("utt: xhci_ring_alloc: failed, cleaning up ring at %p\n", ring);
 	kfree(ring);
 	return NULL;
 }
@@ -1893,7 +1914,7 @@ void xhci_mem_cleanup(struct xhci_hcd *xhci)
 
 	cancel_delayed_work_sync(&xhci->cmd_timer);
 
-	for (i = 0; i < xhci->max_interrupters; i++) {
+	for (i = 0; xhci->interrupters && i < xhci->max_interrupters; i++) {
 		if (xhci->interrupters[i]) {
 			xhci_remove_interrupter(xhci, xhci->interrupters[i]);
 			xhci_free_interrupter(xhci, xhci->interrupters[i]);

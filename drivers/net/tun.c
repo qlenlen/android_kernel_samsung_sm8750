@@ -1512,7 +1512,7 @@ static struct sk_buff *tun_napi_alloc_frags(struct tun_file *tfile,
 	skb->truesize += skb->data_len;
 
 	for (i = 1; i < it->nr_segs; i++) {
-		const struct iovec *iov = iter_iov(it);
+		const struct iovec *iov = iter_iov(it) + i;
 		size_t fragsz = iov->iov_len;
 		struct page *page;
 		void *frag;
@@ -2555,6 +2555,9 @@ static int tun_xdp_one(struct tun_struct *tun,
 	bool skb_xdp = false;
 	struct page *page;
 
+	if (unlikely(datasize < ETH_HLEN))
+		return -EINVAL;
+
 	xdp_prog = rcu_dereference(tun->xdp_prog);
 	if (xdp_prog) {
 		if (gso->gso_type) {
@@ -3227,7 +3230,7 @@ static long __tun_chr_ioctl(struct file *file, unsigned int cmd,
 		// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_VPN {
 #ifdef CONFIG_KNOX_NCM
 		knox_flag |= IFF_META_HDR;
-		return put_user(IFF_TUN | IFF_TAP| IFF_NO_CARRIER | TUN_FEATURES | knox_flag,
+		return put_user(IFF_TUN | IFF_TAP | IFF_NO_CARRIER | TUN_FEATURES | knox_flag,
 				(unsigned int __user *)argp);
 #else
 		return put_user(IFF_TUN | IFF_TAP | IFF_NO_CARRIER | TUN_FEATURES,

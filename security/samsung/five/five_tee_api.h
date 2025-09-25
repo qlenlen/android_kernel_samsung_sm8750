@@ -20,7 +20,6 @@
 
 #include <crypto/hash_info.h>
 #include <linux/types.h>
-#include <five_tee_interface.h>
 
 int verify_hash(enum hash_algo algo, const void *hash, size_t hash_len,
 		const void *label, size_t label_len,

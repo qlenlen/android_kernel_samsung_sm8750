@@ -214,40 +214,66 @@ static void dtm_kfree_args(struct dtm_context *context)
 	}
 }
 
-char *get_arg(char *argv, int arg_index)
+#if KERNEL_VER_GTE(5, 9, 0)
+/* Creates unescaped duplicate of the next command-line argument.
+ * Essentially reverses bprm_print_bprm().
+ * Returns NULL if out of memory or out of arguments. Otherwise, updates
+ * parameters to point to next argument and store argument length
+ */
+static char *argv_dup(const char **argvp, int *arg_len_p)
 {
-	char *temp = strsep(&argv, " ");
-	int index = 0;
+	const char *p = *argvp, *after_arg_p;
+	int arg_len;
+	char *arg_copy;
 
-	while (temp != NULL) {
-		if (index == arg_index)
-			return temp;
-		index++;
-		temp = strsep(&argv, " ");
+	while (*p == ' ')  // skip eventual leading space (just in case)
+		++p;
+	if (!*p) // just for safety
+		return 0;
+	// Compute required size of duplicate (offsets 1, 3 explained in next loop)
+	for (arg_len = 0; *p && *p != ' '; ++p, ++arg_len)
+		if (*p == '\\') {
+			if (p[1] == '\\')
+				++p;
+			else
+				p += 3;
+		}
+	arg_copy = kmalloc(arg_len + 1, GFP_KERNEL);
+	if (!arg_copy) {
+		defex_log_err("DTM::%s: out of memory", __func__);
+		return 0;
 	}
-
-	return NULL;
+	/* Points to next argument (bprm_print_bprm _always_ appends a trailing
+	 * space, but test for '\0' just in case)
+	 */
+	after_arg_p = *p ? p + 1 : p;
+	// Now copy, unescaping
+	for (p = *argvp, arg_len = 0; *p && *p != ' '; ++p, ++arg_len)
+		if (*p == '\\') // An escape must be followed by...
+			if (p[1] == '\\') { // ...either a backslash...
+				arg_copy[arg_len] = '\\';
+				++p;
+			} else { // ...or (always 3-digit) octal number
+				arg_copy[arg_len] = (char)(((p[1] - '0') << 6)
+					+ ((p[2] - '0') << 3) + p[3] - '0');
+				p += 3;
+			}
+		else // plain character
+			arg_copy[arg_len] = *p;
+	arg_copy[arg_len] = 0;
+	if (arg_len_p)
+		*arg_len_p = arg_len;
+	*argvp = after_arg_p; // Prepare for next argument
+	return arg_copy;
 }
 
-int get_ref_len(void *ref)
-{
-	int i = 0;
-	char *ref_p = (char *)ref;
-
-	while (ref_p[i] != '\0')
-		i++;
-
-	return i;
-}
 /*
  * Gets call argument value, copying from user if needed.
  */
-#if KERNEL_VER_GTE(5, 9, 0)
 const char *dtm_get_callee_arg(struct dtm_context *context, int arg_index)
 {
-	char argvs[DTM_MAX_ARG_STRLEN], *argv;
-	char *copy;
-	int max_argc, arg_len, copy_len, ref_len;
+	int max_argc, i_arg, arg_len, arg_len_total;
+	const char *argv_p;
 
 	if (unlikely(!is_dtm_context_valid(context)))
 		return NULL;
@@ -257,32 +283,18 @@ const char *dtm_get_callee_arg(struct dtm_context *context, int arg_index)
 	if (context->callee_argv[arg_index])
 		return context->callee_argv[arg_index];
 
-	ref_len = get_ref_len(context->callee_argv_ref);
-	if (unlikely(ref_len == 0))
-		return NULL;
-
-	copy_len = min_t(int, ref_len, DTM_MAX_ARG_STRLEN);
-	memcpy(argvs, context->callee_argv_ref, copy_len);
-	argvs[(copy_len < DTM_MAX_ARG_STRLEN) ? copy_len : (DTM_MAX_ARG_STRLEN - 1)] = '\0';
-	argv = get_arg(argvs, arg_index);
-	if (unlikely(!argv))
-		return NULL;
-
-	arg_len = strlen(argv) + 1;
-
-	copy_len = min_t(int, arg_len, DTM_MAX_ARG_STRLEN);
-	copy = kzalloc(copy_len, GFP_KERNEL);
-	if (unlikely(!copy))
-		return NULL;
-
-	memcpy(copy, argv, copy_len);
-	copy[copy_len - 1] = '\0';
-
-	context->callee_argv[arg_index] = copy;
-	context->callee_copied_argc++;
-	context->callee_copied_args_len += copy_len;
-	context->callee_total_args_len += arg_len;
-	return copy;
+	// Saves duplicates of _all_ arguments
+	for (argv_p = context->callee_argv_ref, arg_len_total = 0, i_arg = 0;
+		i_arg < max_argc; ++i_arg) {
+		context->callee_argv[i_arg] = argv_dup(&argv_p, &arg_len);
+		if (!context->callee_argv[i_arg])
+			break;
+		arg_len_total += arg_len;
+	}
+	context->callee_copied_argc = i_arg;
+	context->callee_copied_args_len =
+		context->callee_total_args_len = arg_len_total + i_arg;
+	return context->callee_argv[arg_index];
 }
 #else
 const char *dtm_get_callee_arg(struct dtm_context *context, int arg_index)

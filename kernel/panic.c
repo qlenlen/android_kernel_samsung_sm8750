@@ -61,7 +61,7 @@ bool crash_kexec_post_notifiers;
 int panic_on_warn __read_mostly;
 unsigned long panic_on_taint;
 bool panic_on_taint_nousertaint = false;
-bool stop_on_panic = false;
+bool stop_on_panic;
 static unsigned int warn_limit __read_mostly;
 
 int panic_timeout = CONFIG_PANIC_TIMEOUT;
@@ -400,7 +400,8 @@ void panic(const char *fmt, ...)
 
 	if (stop_on_panic) {
 		pr_emerg("stop_on_panic is called, freezing...\n");
-		while(1);
+		while (1)
+			;
 	}
 
 	if (!panic_blink)

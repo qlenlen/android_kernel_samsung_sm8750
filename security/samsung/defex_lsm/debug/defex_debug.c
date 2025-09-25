@@ -23,6 +23,7 @@
 #include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/sysfs.h>
+#include "include/defex_config.h"
 #include "include/defex_debug.h"
 #include "include/defex_internal.h"
 
@@ -116,13 +117,13 @@ __visible_for_testing int log_buffer_get(char *str, int buff_size)
 
 void log_buffer_flush(void)
 {
-	char msg[MAX_LEN];
+	char msg[MAX_MSG_LEN];
 	int msg_len;
 
 	pr_info("%s== Buffer flushing begin ==", DEFEX_LOG_TAG);
 
 	do {
-		msg_len = log_buffer_get(&msg[0], MAX_LEN);
+		msg_len = log_buffer_get(&msg[0], MAX_MSG_LEN);
 		if (msg_len)
 			pr_info("%s", msg);
 	} while (msg_len);
@@ -216,7 +217,7 @@ void storage_log_process(void)
 
 void defex_print_msg(const enum defex_log_level msg_type, const char *format, ...)
 {
-	char msg[MAX_LEN];
+	char msg[MAX_MSG_LEN];
 	int msg_len, ktime_msg_len = 0;
 	va_list aptr;
 	static const char header[] = DEFEX_LOG_TAG;
@@ -225,13 +226,13 @@ void defex_print_msg(const enum defex_log_level msg_type, const char *format, ..
 	if ((msg_type != MSG_TIMEOFF) && (msg_type != MSG_BLOB)) {
 		ktime_t cur_time = ktime_get_boottime();
 
-		ktime_msg_len = snprintf(msg, MAX_LEN,
+		ktime_msg_len = snprintf(msg, MAX_MSG_LEN,
 			"[% 4lld.%04lld] ", cur_time/1000000000, (cur_time%1000000000)/100000);
 	}
 #endif /* DEFEX_LOG_BUFFER_ENABLE || DEFEX_LOG_FILE_ENABLE */
 
 	va_start(aptr, format);
-	msg_len = vsnprintf(msg + ktime_msg_len, MAX_LEN - ktime_msg_len, format, aptr);
+	msg_len = vsnprintf(msg + ktime_msg_len, MAX_MSG_LEN - ktime_msg_len, format, aptr);
 	va_end(aptr);
 	switch (msg_type) {
 	case MSG_CRIT:
@@ -373,6 +374,34 @@ do_abort:
 	return -EPERM;
 }
 
+__visible_for_testing int set_feature_status(const char *status_str,
+				unsigned int feature, unsigned int feature_soft)
+{
+	unsigned int status;
+	unsigned int current_features;
+
+	if (!status_str)
+		return -EINVAL;
+
+	if (kstrtouint(status_str, 10, &status))
+		return -EINVAL;
+
+	if (status > 2)
+		return -EINVAL;
+
+	current_features = defex_get_features();
+
+	current_features &= ~(feature | feature_soft);
+
+	if (status == 1)
+		current_features |= feature;
+	if (status == 2)
+		current_features |= (feature | feature_soft);
+
+	defex_set_features(current_features);
+	return 0;
+}
+
 __visible_for_testing ssize_t debug_store(struct kobject *kobj, struct kobj_attribute *attr,
 			const char *buf, size_t count)
 {
@@ -388,8 +417,9 @@ __visible_for_testing ssize_t debug_store(struct kobject *kobj, struct kobj_attr
 		"im_status=",
 		"sp_status=",
 		"int_status=",
+		"imr_status=",
 		"get_log",
-		"imr_status="
+		"get_features"
 	};
 
 	if (!buf || !p)
@@ -412,30 +442,32 @@ __visible_for_testing ssize_t debug_store(struct kobject *kobj, struct kobj_attr
 		break;
 	case DBG_SET_PE_STATUS:
 #ifdef DEFEX_PED_ENABLE
-		privesc_status_store(buf + l);
+		ret = set_feature_status(buf + l, FEATURE_CHECK_CREDS, FEATURE_CHECK_CREDS_SOFT);
 #endif /* DEFEX_PED_ENABLE */
 		break;
 	case DBG_SET_IM_STATUS:
 #ifdef DEFEX_IMMUTABLE_ENABLE
-		immutable_status_store(buf + l);
+		ret = set_feature_status(buf + l, FEATURE_IMMUTABLE, FEATURE_IMMUTABLE_SOFT);
 #endif /* DEFEX_IMMUTABLE_ENABLE */
 		break;
 	case DBG_SET_IMR_STATUS:
 #ifdef DEFEX_IMMUTABLE_ROOT_ENABLE
-		immutable_root_status_store(buf + l);
+		ret = set_feature_status(buf + l,
+			FEATURE_IMMUTABLE_ROOT, FEATURE_IMMUTABLE_ROOT_SOFT);
 #endif /* DEFEX_IMMUTABLE_ROOT_ENABLE */
 		break;
 	case DBG_SET_SP_STATUS:
 #ifdef DEFEX_SAFEPLACE_ENABLE
-		safeplace_status_store(buf + l);
+		ret = set_feature_status(buf + l, FEATURE_SAFEPLACE, FEATURE_SAFEPLACE_SOFT);
 #endif /* DEFEX_SAFEPLACE_ENABLE */
 		break;
 	case DBG_SET_INT_STATUS:
 #ifdef DEFEX_INTEGRITY_ENABLE
-		integrity_status_store(buf + l);
+		ret = set_feature_status(buf + l, FEATURE_INTEGRITY, FEATURE_INTEGRITY_SOFT);
 #endif /* DEFEX_INTEGRITY_ENABLE */
 		break;
 	case DBG_GET_LOG:
+	case DBG_GET_FEATURES:
 		break;
 	default:
 		break;
@@ -459,7 +491,7 @@ __visible_for_testing ssize_t debug_show(struct kobject *kobj, struct kobj_attri
 
 	switch (last_cmd) {
 	case DBG_SETUID ... DBG_SETGID:
-		res = snprintf(buf, MAX_LEN + 1, "pid=%d\nuid=%d\ngid=%d\neuid=%d\negid=%d\n",
+		res = snprintf(buf, MAX_MSG_LEN + 1, "pid=%d\nuid=%d\ngid=%d\neuid=%d\negid=%d\n",
 			p->pid,
 			uid_get_value(p->cred->uid),
 			uid_get_value(p->cred->gid),
@@ -473,7 +505,7 @@ __visible_for_testing ssize_t debug_show(struct kobject *kobj, struct kobj_attri
 			msg_len = log_buffer_get(&buf[res], buff_size);
 			res += msg_len;
 			buff_size -= msg_len;
-		} while (msg_len && buff_size >= MAX_LEN);
+		} while (msg_len && buff_size >= MAX_MSG_LEN);
 		if (!msg_len)
 			res += snprintf(&buf[res], buff_size, "=== EOF ===\n");
 		else
@@ -481,8 +513,11 @@ __visible_for_testing ssize_t debug_show(struct kobject *kobj, struct kobj_attri
 				(unsigned long)(log_buf_in_index - log_buf_out_index)
 				& DEFEX_LOG_BUF_MASK);
 #else
-		res = snprintf(buf, MAX_LEN + 1, "Log buffer disabled...\n");
+		res = snprintf(buf, MAX_MSG_LEN + 1, "Log buffer disabled...\n");
 #endif /* DEFEX_LOG_BUFFER_ENABLE */
+		break;
+	case DBG_GET_FEATURES:
+		res = snprintf(buf, MAX_MSG_LEN + 1, "%d\n", defex_get_features());
 		break;
 	}
 

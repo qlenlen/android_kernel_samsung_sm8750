@@ -90,3 +90,16 @@ config FUSE_WATCHDOG
 	help
 	  Run fuse watchdog to prepare for the case of the fuse daemon process
 	  getting stuck.
+
+config FUSE_PERF
+	bool "Add fuse performance feature"
+	default y
+	depends on FUSE_FS
+	depends on FUSE_WATCHDOG
+	depends on 64BIT
+	help
+	  This feature measures the time taken by the fuse daemon to read from
+	  and write to /dev/fuse.
+
+	  This data can be read through '/proc/fuse_perf/<name>'. Once the
+	  file is fully read, the data will be cleared.

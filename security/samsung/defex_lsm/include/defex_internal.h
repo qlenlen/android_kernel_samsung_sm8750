@@ -51,17 +51,17 @@
 #define FEATURE_INTEGRITY_SOFT			(1 << 15)
 #define FEATURE_IMMUTABLE_ROOT			(1 << 16)
 #define FEATURE_IMMUTABLE_ROOT_SOFT		(1 << 17)
+#define FEATURE_IMMUTABLE_ROOT_V2		(1 << 18)
+#define FEATURE_IMMUTABLE_ROOT_V2_SOFT	(1 << 19)
 
-#define FEATURE_CLEAR_ALL			(0xFF0000)
+#define DEFEX_TM_DEBUG_VIOLATIONS		(1 << 24)
+#define DEFEX_TM_DEBUG_CALLS			(1 << 25)
 
 #define DEFEX_ALLOW				0
 #define DEFEX_DENY				1
 
 #define DEFEX_OK				0
 #define DEFEX_NOK				1
-
-#define DEFEX_STARTED				1
-
 
 /* -------------------------------------------------------------------------- */
 /* Integrity feature */
@@ -113,57 +113,12 @@
 		(cred_data_ptr)->cred_flags |= cred_flags; } \
 		while (0)
 
-extern unsigned char global_privesc_status;
-
 void get_task_creds(struct task_struct *p, unsigned int *uid_ptr, unsigned int *fsuid_ptr,
 		unsigned int *egid_ptr, unsigned short *cred_flags_ptr);
 int set_task_creds(struct task_struct *p, unsigned int uid, unsigned int fsuid,
 		unsigned int egid, unsigned short cred_flags);
 void set_task_creds_tcnt(struct task_struct *p, int addition);
 int is_task_creds_ready(void);
-
-/* -------------------------------------------------------------------------- */
-/* Integrity feature */
-/* -------------------------------------------------------------------------- */
-
-extern unsigned char global_integrity_status;
-
-/* -------------------------------------------------------------------------- */
-/* SafePlace feature */
-/* -------------------------------------------------------------------------- */
-
-extern unsigned char global_safeplace_status;
-
-/* -------------------------------------------------------------------------- */
-/* Immutable feature */
-/* -------------------------------------------------------------------------- */
-
-extern unsigned char global_immutable_status;
-
-/* -------------------------------------------------------------------------- */
-/* Immutable root feature */
-/* -------------------------------------------------------------------------- */
-
-extern unsigned char global_immutable_root_status;
-
-/* -------------------------------------------------------------------------- */
-/* Trusted Map feature */
-/* -------------------------------------------------------------------------- */
-
-extern unsigned char global_trusted_map_status;
-
-enum trusted_map_status {
-	DEFEX_TM_ENFORCING_MODE		= (1 << 0),
-	DEFEX_TM_PERMISSIVE_MODE	= (1 << 1),
-	DEFEX_TM_DEBUG_VIOLATIONS	= (1 << 2),
-	DEFEX_TM_DEBUG_CALLS		= (1 << 3),
-	DEFEX_TM_LAST_STATUS		= (1 << 4) - 1
-};
-
-static inline int defex_tm_mode_enabled(int mode_flag)
-{
-	return global_trusted_map_status & mode_flag;
-}
 
 struct defex_context;
 #if KERNEL_VER_GTE(5, 9, 0)
@@ -240,24 +195,14 @@ int __init defex_init_sysfs(void);
 void __init creds_fast_hash_init(void);
 int __init do_load_rules(void);
 
-/* -------------------------------------------------------------------------- */
-/* Defex debug API */
-/* -------------------------------------------------------------------------- */
-
-int immutable_status_store(const char *status_str);
-int immutable_root_status_store(const char *status_str);
-int privesc_status_store(const char *status_str);
-int safeplace_status_store(const char *status_str);
-int integrity_status_store(const char *status_str);
-
-extern volatile bool is_reboot_pending;
-extern bool boot_state_recovery __ro_after_init;
+bool is_boot_state_recovery(void);
+bool is_reboot_pending(void);
 #ifdef DEFEX_DEPENDING_ON_OEMUNLOCK
-extern bool boot_state_unlocked __ro_after_init;
-extern int warranty_bit __ro_after_init;
+bool is_boot_state_unlocked(void);
+int get_warranty_bit(void);
 #else
-#define boot_state_unlocked	(0)
-#define warranty_bit		(0)
+#define is_boot_state_unlocked(...)	(0)
+#define get_warranty_bit(...)		(0)
 #endif /* DEFEX_DEPENDING_ON_OEMUNLOCK */
 
 #endif /* CONFIG_SECURITY_DEFEX_INTERNAL_H */

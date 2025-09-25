@@ -485,6 +485,10 @@ struct fuse_req {
 
 	/** fuse_mount this request belongs to */
 	struct fuse_mount *fm;
+
+#ifdef CONFIG_FUSE_PERF
+	ktime_t dispatch_time;
+#endif
 };
 
 struct fuse_iqueue;
@@ -634,6 +638,10 @@ struct fuse_fs_context {
 
 	/* fuse_dev pointer to fill in, should contain NULL on entry */
 	void **fudptr;
+
+#ifdef CONFIG_FUSE_PERF
+	const char *perf_node_name;
+#endif
 };
 
 struct fuse_sync_bucket {
@@ -975,6 +983,11 @@ struct fuse_conn {
 #ifdef CONFIG_FUSE_WATCHDOG
 	struct task_struct *watchdog_thread;
 #endif
+
+#ifdef CONFIG_FUSE_PERF
+	const char *perf_node_name;
+	struct fuse_perf_struct *perf_struct;
+#endif
 };
 
 /*
@@ -996,6 +1009,7 @@ struct fuse_mount {
 
 	/* Entry on fc->mounts */
 	struct list_head fc_entry;
+	struct rcu_head rcu;
 };
 
 static inline struct fuse_mount *get_fuse_mount_super(struct super_block *sb)
@@ -2162,5 +2176,35 @@ void fuse_daemon_watchdog_stop(struct fuse_conn *fc);
 static inline void fuse_daemon_watchdog_start(struct fuse_conn *fc) {}
 static inline void fuse_daemon_watchdog_stop(struct fuse_conn *fc) {}
 #endif
+
+#ifdef CONFIG_FUSE_PERF
+void fuse_perf_init(struct fuse_conn *fc);
+void fuse_perf_destroy(struct fuse_conn *fc);
+void fuse_perf_start_hook(struct fuse_req *req);
+void fuse_perf_end_hook(struct fuse_req *req);
+void fuse_perf_check_last_read(struct fuse_conn *fc);
+
+int fuse_perf_proc_init(void);
+void fuse_perf_proc_cleanup(void);
+#else
+static inline void fuse_perf_init(struct fuse_conn *fc) {}
+static inline void fuse_perf_destroy(struct fuse_conn *fc) {}
+static inline void fuse_perf_start_hook(struct fuse_req *req) {}
+static inline void fuse_perf_end_hook(struct fuse_req *req) {}
+static inline void fuse_perf_check_last_read(struct fuse_conn *fc) {}
+
+static inline int fuse_perf_proc_init(void) { return 0; }
+static inline void fuse_perf_proc_cleanup(void) {}
+#endif /* CONFIG_FUSE_PERF */
+
+static inline void fuse_sec_start_hook(struct fuse_req *req)
+{
+	fuse_perf_start_hook(req);
+}
+
+static inline void fuse_sec_end_hook(struct fuse_req *req)
+{
+	fuse_perf_end_hook(req);
+}
 
 #endif /* _FS_FUSE_I_H */

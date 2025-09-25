@@ -12,6 +12,7 @@
 #include <linux/cred.h>
 #include <linux/kobject.h>
 #include <linux/string.h>
+#include "include/defex_config.h"
 #include "include/defex_debug.h"
 #include "include/defex_internal.h"
 #include "include/defex_test.h"
@@ -94,8 +95,8 @@ static void debug_show_test(struct kunit *test)
 {
 	struct task_struct *p = current;
 	struct kset *defex_kset = kset_create_and_add("debug_show_test", NULL, NULL);
-	char expected_output[MAX_LEN + 1];
-	char buff[MAX_LEN + 1];
+	char expected_output[MAX_MSG_LEN + 1];
+	char buff[MAX_MSG_LEN + 1];
 	int res = 0;
 
 	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, defex_kset);
@@ -105,7 +106,8 @@ static void debug_show_test(struct kunit *test)
 	res = debug_store(NULL, NULL, "uid=1000", 10);
 	KUNIT_ASSERT_EQ(test, res, 10);
 
-	res = snprintf(expected_output, MAX_LEN + 1, "pid=%d\nuid=%d\ngid=%d\neuid=%d\negid=%d\n",
+	res = snprintf(expected_output, MAX_MSG_LEN + 1,
+			"pid=%d\nuid=%d\ngid=%d\neuid=%d\negid=%d\n",
 			p->pid,
 			uid_get_value(p->cred->uid),
 			uid_get_value(p->cred->gid),
@@ -117,6 +119,36 @@ static void debug_show_test(struct kunit *test)
 
 	/* free resources */
 	kset_unregister(defex_kset);
+}
+
+static void set_feature_status_test(struct kunit *test)
+{
+#ifdef DEFEX_DEBUG_ENABLE
+
+	char *invalid_prefix = "test";
+	char *over_range_prefix = "5";
+	char *valid_prefix = "2";
+
+	int current_features_backup = defex_get_features();
+
+	/* buffer null */
+	KUNIT_EXPECT_EQ(test, set_feature_status(NULL,
+			FEATURE_CHECK_CREDS, FEATURE_CHECK_CREDS_SOFT), -EINVAL);
+	/* invalid prefix */
+	KUNIT_EXPECT_EQ(test, set_feature_status(invalid_prefix,
+			FEATURE_CHECK_CREDS, FEATURE_CHECK_CREDS_SOFT), -EINVAL);
+	/* over range prefix */
+	KUNIT_EXPECT_EQ(test, set_feature_status(over_range_prefix,
+			FEATURE_CHECK_CREDS, FEATURE_CHECK_CREDS_SOFT), -EINVAL);
+	/* valid prefix */
+	KUNIT_EXPECT_EQ(test, set_feature_status(valid_prefix,
+			FEATURE_CHECK_CREDS, FEATURE_CHECK_CREDS_SOFT), 0);
+	/* __init function */
+
+	defex_set_features(current_features_backup);
+#else
+	KUNIT_SUCCEED(test);
+#endif /* DEFEX_DEBUG_ENABLE */
 }
 
 
@@ -149,6 +181,7 @@ static struct kunit_case defex_debug_test_cases[] = {
 	KUNIT_CASE(debug_store_test),
 	KUNIT_CASE(debug_show_test),
 	KUNIT_CASE(debug_attribute_test),
+	KUNIT_CASE(set_feature_status_test),
 	{},
 };
 

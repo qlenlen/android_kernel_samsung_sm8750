@@ -47,11 +47,7 @@ static struct group_info init_groups = { .usage = ATOMIC_INIT(2) };
 /*
  * The initial credentials for the initial task
  */
-struct cred init_cred
-#ifdef CONFIG_KDP
-__kdp_ro
-#endif
-	= {
+struct cred init_cred = {
 	.usage			= ATOMIC_LONG_INIT(4),
 	.uid			= GLOBAL_ROOT_UID,
 	.gid			= GLOBAL_ROOT_GID,
@@ -71,6 +67,42 @@ __kdp_ro
 	.group_info		= &init_groups,
 	.ucounts		= &init_ucounts,
 };
+
+#ifdef CONFIG_KDP
+
+struct cred_kdp_init init_cred_use_cnt = {
+	.use_cnt = ATOMIC_LONG_INIT(4),
+	.ro_rcu_head_init = {
+		.non_rcu = 0,
+		.bp_cred = NULL,
+	},
+};
+
+struct cred_kdp init_cred_kdp __kdp_ro = {
+	.cred.usage			= ATOMIC_LONG_INIT(4),
+	.cred.uid			= GLOBAL_ROOT_UID,
+	.cred.gid			= GLOBAL_ROOT_GID,
+	.cred.suid			= GLOBAL_ROOT_UID,
+	.cred.sgid			= GLOBAL_ROOT_GID,
+	.cred.euid			= GLOBAL_ROOT_UID,
+	.cred.egid			= GLOBAL_ROOT_GID,
+	.cred.fsuid			= GLOBAL_ROOT_UID,
+	.cred.fsgid			= GLOBAL_ROOT_GID,
+	.cred.securebits		= SECUREBITS_DEFAULT,
+	.cred.cap_inheritable	= CAP_EMPTY_SET,
+	.cred.cap_permitted		= CAP_FULL_SET,
+	.cred.cap_effective		= CAP_FULL_SET,
+	.cred.cap_bset		= CAP_FULL_SET,
+	.cred.user			= INIT_USER,
+	.cred.user_ns		= &init_user_ns,
+	.cred.group_info		= &init_groups,
+	.cred.ucounts		= &init_ucounts,
+	.use_cnt = (atomic_long_t *)&init_cred_use_cnt,
+	.bp_task = &init_task,
+	.bp_pgd	= NULL,
+	.type = 0,
+};
+#endif
 
 /*
  * The RCU callback to actually dispose of a set of credentials
@@ -532,18 +564,11 @@ EXPORT_SYMBOL(commit_creds);
  */
 void abort_creds(struct cred *new)
 {
-#ifdef CONFIG_KDP
-	int ret = 0;
-#endif
 	kdebug("abort_creds(%p{%ld})", new,
 	       atomic_long_read(&new->usage));
 
 #ifdef CONFIG_KDP
-	ret = is_kdp_protect_addr((unsigned long)new);
-
-	if (ret == PROTECT_INIT)
-		BUG_ON(atomic_long_read(init_cred_kdp.use_cnt) < 1);
-	else if (ret == PROTECT_KMEM)
+	if (is_kdp_protect_addr((unsigned long)new))
 		BUG_ON(atomic_long_read(((struct cred_kdp *)new)->use_cnt) < 1);
 	else
 #endif

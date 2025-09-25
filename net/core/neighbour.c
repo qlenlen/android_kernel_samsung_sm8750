@@ -1035,8 +1035,8 @@ static __inline__ int neigh_max_probes(struct neighbour *n)
 	struct neigh_parms *p = n->parms;
 	if (n->dev != NULL && !strcmp(n->dev->name, "aware_data0")) {
 		return (NEIGH_VAR(p, UCAST_PROBES) * 2) + NEIGH_VAR(p, APP_PROBES) +
-		       (n->nud_state & NUD_PROBE ? NEIGH_VAR(p, MCAST_REPROBES) :
-		        NEIGH_VAR(p, MCAST_PROBES));
+			(n->nud_state & NUD_PROBE ? NEIGH_VAR(p, MCAST_REPROBES) :
+			NEIGH_VAR(p, MCAST_PROBES));
 	}
 	return NEIGH_VAR(p, UCAST_PROBES) + NEIGH_VAR(p, APP_PROBES) +
 	       (n->nud_state & NUD_PROBE ? NEIGH_VAR(p, MCAST_REPROBES) :
@@ -1143,9 +1143,10 @@ static void neigh_timer_handler(struct timer_list *t)
 		/* NUD_PROBE|NUD_INCOMPLETE */
 		if (neigh->dev != NULL && !strcmp(neigh->dev->name, "aware_data0")) {
 			next = now + max(NEIGH_VAR(neigh->parms, RETRANS_TIME)/5,
-					 HZ/100);
-		} else
-		next = now + max(NEIGH_VAR(neigh->parms, RETRANS_TIME), HZ/100);
+					HZ/100);
+		} else {
+			next = now + max(NEIGH_VAR(neigh->parms, RETRANS_TIME), HZ/100);
+		}
 	}
 
 	if ((neigh->nud_state & (NUD_INCOMPLETE | NUD_PROBE)) &&
@@ -1205,14 +1206,16 @@ int __neigh_event_send(struct neighbour *neigh, struct sk_buff *skb,
 				next = now + 1;
 			} else {
 				immediate_probe = true;
-				if (neigh->dev != NULL && !strcmp(neigh->dev->name, "aware_data0")) {
+				if (neigh->dev != NULL &&
+					!strcmp(neigh->dev->name, "aware_data0")) {
 					next = now + max(NEIGH_VAR(neigh->parms,
 								   RETRANS_TIME)/25,
 							 HZ/100);
-				} else
-				next = now + max(NEIGH_VAR(neigh->parms,
-							   RETRANS_TIME),
-						 HZ / 100);
+				} else {
+					next = now + max(NEIGH_VAR(neigh->parms,
+								   RETRANS_TIME),
+							 HZ / 100);
+				}
 			}
 			neigh_add_timer(neigh, next);
 		} else {
@@ -2889,6 +2892,7 @@ static int neigh_dump_info(struct sk_buff *skb, struct netlink_callback *cb)
 	err = neigh_valid_dump_req(nlh, cb->strict_check, &filter, cb->extack);
 	if (err < 0 && cb->strict_check)
 		return err;
+	err = 0;
 
 	s_t = cb->args[0];
 

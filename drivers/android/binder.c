@@ -78,7 +78,6 @@
 #ifdef CONFIG_SAMSUNG_FREECESS
 #include <linux/freecess.h>
 #endif
-#include "binder_pick_impl.h"
 #include <trace/hooks/binder.h>
 
 static HLIST_HEAD(binder_deferred_list);
@@ -579,9 +578,7 @@ static bool binder_has_work(struct binder_thread *thread, bool do_proc_work)
 static bool binder_available_for_proc_work_ilocked(struct binder_thread *thread)
 {
 	return !thread->transaction_stack &&
-		binder_worklist_empty_ilocked(&thread->todo) &&
-		(thread->looper & (BINDER_LOOPER_STATE_ENTERED |
-				   BINDER_LOOPER_STATE_REGISTERED));
+		binder_worklist_empty_ilocked(&thread->todo);
 }
 
 static void binder_wakeup_poll_threads_ilocked(struct binder_proc *proc,
@@ -3225,12 +3222,15 @@ static void freecess_async_binder_report(struct binder_proc *proc,
 		&& (proc->pid != target_proc->pid)) {
 		if (thread_group_is_frozen(target_proc->tsk)) {
 			if (t->buffer->data_size > skip_bytes) {
-				if (copy_from_user(buf_user, (const void __user *)(uintptr_t)tr->data.ptr.buffer,
-					min_t(binder_size_t, tr->data_size, INTERFACETOKEN_BUFF_SIZE - 2)) == 0) {
+				if (copy_from_user(buf_user, (const void __user *)
+					(uintptr_t)tr->data.ptr.buffer,
+					min_t(binder_size_t, tr->data_size,
+					INTERFACETOKEN_BUFF_SIZE - 2)) == 0) {
 					p = &buf_user[skip_bytes];
 					i = 0;
 					j = skip_bytes + 1;
-					while (i < INTERFACETOKEN_BUFF_SIZE && j < t->buffer->data_size && *p != '\0') {
+					while (i < INTERFACETOKEN_BUFF_SIZE
+							&& j < t->buffer->data_size && *p != '\0') {
 						buf[i++] = *p;
 						j += 2;
 						p += 2;
@@ -3238,7 +3238,8 @@ static void freecess_async_binder_report(struct binder_proc *proc,
 					if (i == INTERFACETOKEN_BUFF_SIZE)
 						buf[i-1] = '\0';
 				}
-				binder_report(target_proc->tsk, tr->code, buf, tr->flags & TF_ONE_WAY);
+				binder_report(target_proc->tsk, tr->code,
+							buf, tr->flags & TF_ONE_WAY);
 			}
 		}
 	}
@@ -3255,7 +3256,8 @@ static void freecess_sync_binder_report(struct binder_proc *proc,
 		&& target_proc->tsk && task_euid(target_proc->tsk).val > 10000
 		&& (proc->pid != target_proc->pid)
 		&& thread_group_is_frozen(target_proc->tsk)) {
-		//if sync binder, we don't need detecting info, so set code and interfacename as default value.
+		// if sync binder, we don't need detecting info,
+		// so set code and interfacename as default value.
 		binder_report(target_proc->tsk, 0, "sync_binder", tr->flags & TF_ONE_WAY);
 	}
 }
@@ -3433,6 +3435,7 @@ static void binder_transaction(struct binder_proc *proc,
 			goto err_invalid_target_handle;
 		}
 		trace_android_vh_binder_trans(target_proc, proc, thread, tr);
+
 #ifdef CONFIG_SAMSUNG_FREECESS
 		freecess_sync_binder_report(proc, target_proc, tr);
 #endif
@@ -3684,7 +3687,6 @@ static void binder_transaction(struct binder_proc *proc,
 		return_error_line = __LINE__;
 		goto err_bad_offset;
 	}
-
 #ifdef CONFIG_SAMSUNG_FREECESS
 	freecess_async_binder_report(proc, target_proc, tr, t);
 #endif
@@ -4103,13 +4105,13 @@ err_invalid_target_handle:
 	}
 
 	binder_debug(BINDER_DEBUG_FAILED_TRANSACTION,
-		     "%d:%d transaction %s to %d:%d failed %d/%d/%d, size %lld-%lld line %d\n",
+		     "%d:%d transaction %s to %d:%d failed %d/%d/%d, code %u size %lld-%lld line %d\n",
 		     proc->pid, thread->pid, reply ? "reply" :
 		     (tr->flags & TF_ONE_WAY ? "async" : "call"),
 		     target_proc ? target_proc->pid : 0,
 		     target_thread ? target_thread->pid : 0,
 		     t_debug_id, return_error, return_error_param,
-		     (u64)tr->data_size, (u64)tr->offsets_size,
+		     tr->code, (u64)tr->data_size, (u64)tr->offsets_size,
 		     return_error_line);
 
 	if (target_thread)
@@ -4187,7 +4189,6 @@ binder_request_freeze_notification(struct binder_proc *proc,
 	INIT_LIST_HEAD(&freeze->work.entry);
 	freeze->cookie = handle_cookie->cookie;
 	freeze->work.type = BINDER_WORK_FROZEN_BINDER;
-
 	ref->freeze = freeze;
 
 	if (ref->node->proc) {
@@ -6953,7 +6954,8 @@ static void binder_in_transaction(struct binder_proc *proc, int uid)
 						found = true;
 						break;
 					}
-				} else if (w->type != BINDER_WORK_TRANSACTION_COMPLETE && w->type != BINDER_WORK_NODE) {
+				} else if (w->type != BINDER_WORK_TRANSACTION_COMPLETE
+							&& w->type != BINDER_WORK_NODE) {
 					found = true;
 					break;
 				}
@@ -7022,7 +7024,8 @@ static void binder_in_transaction(struct binder_proc *proc, int uid)
 					found = true;
 					break;
 				}
-			} else if (w->type != BINDER_WORK_TRANSACTION_COMPLETE && w->type != BINDER_WORK_NODE) {
+			} else if (w->type != BINDER_WORK_TRANSACTION_COMPLETE
+				&& w->type != BINDER_WORK_NODE) {
 				found = true;
 				break;
 			}
@@ -7072,7 +7075,7 @@ static const char * const binder_return_strings[] = {
 	"BR_FAILED_REPLY",
 	"BR_FROZEN_REPLY",
 	"BR_ONEWAY_SPAM_SUSPECT",
-	"BR_TRANSACTION_PENDING_FROZEN"
+	"BR_TRANSACTION_PENDING_FROZEN",
 };
 
 static const char * const binder_command_strings[] = {
@@ -7104,7 +7107,7 @@ static const char * const binder_objstat_strings[] = {
 	"ref",
 	"death",
 	"transaction",
-	"transaction_complete"
+	"transaction_complete",
 };
 
 static void print_binder_stats(struct seq_file *m, const char *prefix,
@@ -7432,10 +7435,6 @@ static int __init binder_init(void)
 	struct hlist_node *tmp;
 	char *device_names = NULL;
 	const struct binder_debugfs_entry *db_entry;
-
-	if (binder_use_rust)
-		return 0;
-	binder_driver_initialized = true;
 
 	ret = binder_alloc_shrinker_init();
 	if (ret)

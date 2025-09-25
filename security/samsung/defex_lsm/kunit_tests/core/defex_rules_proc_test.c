@@ -110,7 +110,7 @@ static void check_current_path(char *current_path,
 	is_system = ((strncmp("/system/", current_path, 8) == 0) ||
 			(strncmp("/product/", current_path, 9) == 0) ||
 			(strncmp("/apex/", current_path, 6) == 0) ||
-			(strncmp("/system_ext/", current_path, 12) == 0)) ? 1 : 0;
+			(strncmp("/system_ext/", current_path, 12) == 0));
 
 	if (!(feature_flags & feature_is_file)) {
 		if (strlen(existing_directory_path_open) == 0 &&
@@ -133,7 +133,8 @@ static void check_current_path(char *current_path,
 			if (!IS_ERR_OR_NULL(file_ptr)) {
 				if (feature_flags & feature_integrity_check) {
 					if (strlen(first_file) == 0)
-						strscpy(first_file, current_path, sizeof(first_file));
+						strscpy(first_file, current_path,
+								sizeof(first_file));
 				} else if (strlen(second_file) == 0) {
 					strscpy(second_file, current_path, sizeof(second_file));
 					second_file_attr = attr;
@@ -187,7 +188,8 @@ static void find_paths(struct d_tree *the_tree, struct d_tree_item *parent_node,
 			current_path[path_len] = '/';
 			memcpy(current_path + path_len + 1, node_name, name_size);
 
-			check_current_path(current_path, child_node->features, path_len + name_size + 1);
+			check_current_path(current_path, child_node->features,
+							path_len + name_size + 1);
 			find_paths(the_tree, child_node, current_path, path_len + name_size + 1);
 			current_path[path_len] = 0;
 		}

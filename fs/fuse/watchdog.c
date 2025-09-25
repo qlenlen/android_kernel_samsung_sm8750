@@ -34,6 +34,8 @@ static int watch_daemon_status(void *data)
 	set_freezable();
 
 	while (cnt < MAX_WAIT_FUSE_ABORT) {
+		fuse_perf_check_last_read(fc);
+
 		/*
 		 * Use conditional wait to prevent race between system freezing
 		 * request and sleep.

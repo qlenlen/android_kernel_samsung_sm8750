@@ -22,6 +22,15 @@ config SECURITY_DEFEX_GKI
 	  Default value will be set to "y" if the build is GKI compatible.
 	  And it will be changed to "n" by build.py at platform-build.
 
+config SECURITY_DEFEX_NOBOOTPART
+	bool "Defex nobootpart build"
+	depends on SECURITY_DEFEX
+	default n
+	help
+	  This config instructs do not use of boot partition to store the rules.
+	  This is similar to SECURITY_DEFEX_GKI config, but allows the debug build.
+	  The value should be set to "y" to work with disabled boot partition.
+
 config DEFEX_KERNEL_ONLY
 	bool "Defex Kernel Only"
 	depends on SECURITY_DEFEX
@@ -60,6 +69,30 @@ config SECURITY_DEFEX_IMR
 	default n
 	help
 	  This lets defex to know whether device supports Immutble root or not.
+	  If you are unsure how to answer this question, answer N.
+
+config SECURITY_DEFEX_IMR_PERMISSIVE
+	bool "Immutable root permissive"
+	depends on SECURITY_DEFEX
+	default n
+	help
+	  This lets defex to know whether device supports Immutble root permissive mode or not.
+	  If you are unsure how to answer this question, answer N.
+
+config SECURITY_DEFEX_IMR_V2
+	bool "Immutable root v2"
+	depends on SECURITY_DEFEX
+	default n
+	help
+	  This lets defex to know whether device supports Immutable root v2 or not.
+	  If you are unsure how to answer this question, answer N.
+
+config SECURITY_DEFEX_IMR_V2_PERMISSIVE
+	bool "Immutable root v2 permissive"
+	depends on SECURITY_DEFEX
+	default n
+	help
+	  This lets defex to know whether device supports Immutable root v2 permissive mode or not.
 	  If you are unsure how to answer this question, answer N.
 
 config SECURITY_DEFEX_SEC_FACTORY

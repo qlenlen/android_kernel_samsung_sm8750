@@ -47,9 +47,7 @@ struct rule_item_struct {
 		unsigned int data_size;
 	} __attribute__((packed));
 	unsigned char size;
-#ifdef DEFEX_INTEGRITY_ENABLE
 	unsigned char integrity[INTEGRITY_LENGTH];
-#endif /* DEFEX_INTEGRITY_ENABLE */
 	char name[0];
 } __attribute__((packed));
 

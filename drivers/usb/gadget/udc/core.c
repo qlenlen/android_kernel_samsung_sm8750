@@ -118,12 +118,10 @@ int usb_ep_enable(struct usb_ep *ep)
 		goto out;
 
 	/* UDC drivers can't handle endpoints with maxpacket size 0 */
-	if (usb_endpoint_maxp(ep->desc) == 0) {
-		/*
-		 * We should log an error message here, but we can't call
-		 * dev_err() because there's no way to find the gadget
-		 * given only ep.
-		 */
+	if (!ep->desc || usb_endpoint_maxp(ep->desc) == 0) {
+		WARN_ONCE(1, "%s: ep%d (%s) has %s\n", __func__, ep->address, ep->name,
+			  (!ep->desc) ? "NULL descriptor" : "maxpacket 0");
+
 		ret = -EINVAL;
 		goto out;
 	}
@@ -760,18 +758,23 @@ static int usb_gadget_disconnect_locked(struct usb_gadget *gadget)
 	int ret = 0;
 
 	if (!gadget->ops->pullup) {
+		pr_err("%s: gadget pullup operation not supported\n", __func__);
 		ret = -EOPNOTSUPP;
 		goto out;
 	}
 
-	if (!gadget->connected)
+	if (!gadget->connected) {
+		pr_err("%s: gadget not connected\n", __func__);
 		goto out;
+	}
 
 	if (gadget->deactivated || !gadget->udc->started) {
 		/*
 		 * If gadget is deactivated we only save new state.
 		 * Gadget will stay disconnected after activation.
 		 */
+		pr_err("%s: gadget->deactivated(%d) gadget->udc->started(%d)\n",
+	       __func__, gadget->deactivated, gadget->udc->started);
 		gadget->connected = false;
 		goto out;
 	}
@@ -1421,7 +1424,15 @@ int usb_add_gadget(struct usb_gadget *gadget)
 	if (ret)
 		goto err_free_id;
 
+	ret = sysfs_create_link(&udc->dev.kobj,
+				&gadget->dev.kobj, "gadget");
+	if (ret)
+		goto err_del_gadget;
+
 	return 0;
+
+ err_del_gadget:
+	device_del(&gadget->dev);
 
  err_free_id:
 	ida_free(&gadget_id_numbers, gadget->id_number);
@@ -1531,8 +1542,9 @@ void usb_del_gadget(struct usb_gadget *gadget)
 	mutex_unlock(&udc_lock);
 
 	kobject_uevent(&udc->dev.kobj, KOBJ_REMOVE);
-	flush_work(&gadget->work);
+	sysfs_remove_link(&udc->dev.kobj, "gadget");
 	device_del(&gadget->dev);
+	flush_work(&gadget->work);
 	ida_free(&gadget_id_numbers, gadget->id_number);
 	cancel_work_sync(&udc->vbus_work);
 	device_unregister(&udc->dev);
@@ -1635,7 +1647,7 @@ static void gadget_unbind_driver(struct device *dev)
 	struct usb_udc *udc = gadget->udc;
 	struct usb_gadget_driver *driver = udc->driver;
 
-	dev_dbg(&udc->dev, "unbinding gadget driver [%s]\n", driver->function);
+	dev_info(&udc->dev, "unbinding gadget driver [%s]\n", driver->function);
 
 	udc->allow_connect = false;
 	cancel_work_sync(&udc->vbus_work);
@@ -1673,6 +1685,7 @@ int usb_gadget_register_driver_owner(struct usb_gadget_driver *driver,
 	driver->driver.bus = &gadget_bus_type;
 	driver->driver.owner = owner;
 	driver->driver.mod_name = mod_name;
+	driver->driver.probe_type = PROBE_FORCE_SYNCHRONOUS;
 	ret = driver_register(&driver->driver);
 	if (ret) {
 		pr_warn("%s: driver registration failed: %d\n",

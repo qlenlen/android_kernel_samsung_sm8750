@@ -18,10 +18,12 @@
 #define DBG_SET_IM_STATUS	4
 #define DBG_SET_SP_STATUS	5
 #define DBG_SET_INT_STATUS	6
-#define DBG_GET_LOG		7
-#define DBG_SET_IMR_STATUS	8
+#define DBG_SET_IMR_STATUS	7
+#define DBG_GET_LOG		8
+#define DBG_GET_FEATURES	9
 
 #define MAX_DATA_LEN		300
+#define MAX_MSG_LEN		256
 
 #define DEFEX_LOG_TAG			"[DEFEX] "
 #define DEFEX_LOG_BUF_SIZE		(PAGE_SIZE * 64)
@@ -76,6 +78,42 @@ void storage_log_process(void);
 
 #else
 
+#ifdef DEFEX_USERLAND_TUNABLE_LOG
+extern int defex_log_mask;
+#define defex_log_crit(fmt, ...) \
+	do { \
+		if (defex_log_mask & MSG_CRIT) \
+			printf(DEFEX_LOG_TAG fmt "\n", ##__VA_ARGS__); \
+	} while (0)
+#define defex_log_err(fmt, ...) \
+	do { \
+		if (defex_log_mask & MSG_ERR) \
+			printf(DEFEX_LOG_TAG fmt "\n", ##__VA_ARGS__); \
+	} while (0)
+#define defex_log_warn(fmt, ...) \
+	do { \
+		if (defex_log_mask & MSG_WARN) \
+			printf(DEFEX_LOG_TAG fmt "\n", ##__VA_ARGS__); \
+	} while (0)
+#define defex_log_info(fmt, ...) \
+	do { \
+		if (defex_log_mask & MSG_INFO) \
+			printf(DEFEX_LOG_TAG fmt "\n", ##__VA_ARGS__); \
+	} while (0)
+#define defex_log_debug(fmt, ...) \
+	do { \
+		if (defex_log_mask & MSG_DEBUG) \
+			printf(DEFEX_LOG_TAG fmt "\n", ##__VA_ARGS__); \
+	} while (0)
+#define defex_log_timeoff(fmt, ...) \
+	do { \
+		if (defex_log_mask & MSG_TIMEOFF) \
+			printf(DEFEX_LOG_TAG fmt "\n", ##__VA_ARGS__); \
+	} while (0)
+#define defex_log_blob(fmt, ...) \
+	do { if (defex_log_mask & MSG_UNKNOWN) printf(fmt "\n", ##__VA_ARGS__); } while (0)
+extern char defex_enable_dsms;
+#else
 #define defex_log_crit(fmt, ...)       printf(DEFEX_LOG_TAG fmt "\n", ##__VA_ARGS__)
 #define defex_log_err(fmt, ...)        printf(DEFEX_LOG_TAG fmt "\n", ##__VA_ARGS__)
 #define defex_log_warn(fmt, ...)       printf(DEFEX_LOG_TAG fmt "\n", ##__VA_ARGS__)
@@ -83,11 +121,12 @@ void storage_log_process(void);
 #define defex_log_debug(fmt, ...)      printf(DEFEX_LOG_TAG fmt "\n", ##__VA_ARGS__)
 #define defex_log_timeoff(fmt, ...)    printf(DEFEX_LOG_TAG fmt "\n", ##__VA_ARGS__)
 #define defex_log_blob(fmt, ...)       printf(fmt "\n", ##__VA_ARGS__)
+#endif
 
 #endif /* __KERNEL__ */
 
 #ifdef DEFEX_SHOW_RULES_ENABLE
-int defex_show_structure(void *packed_rules, int rules_size);
+int defex_rules_show(void *packed_rules, size_t rules_size);
 void feature_to_string(char *str, unsigned int flags);
 #endif /* DEFEX_SHOW_RULES_ENABLE */
 

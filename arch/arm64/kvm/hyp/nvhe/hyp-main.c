@@ -648,6 +648,10 @@ static void sync_debug_state(struct pkvm_hyp_vcpu *hyp_vcpu)
 		return;
 
 	__vcpu_restore_guest_debug_regs(vcpu);
+	vcpu_write_sys_reg(host_vcpu, vcpu_read_sys_reg(vcpu, MDSCR_EL1),
+						   MDSCR_EL1);
+	*vcpu_cpsr(host_vcpu) = *vcpu_cpsr(vcpu);
+
 	vcpu->arch.debug_ptr = &host_vcpu->arch.vcpu_debug_state;
 }
 
@@ -941,16 +945,15 @@ static void handle___kvm_vcpu_run(struct kvm_cpu_context *host_ctxt)
 	if (!host_vcpu)
 		goto out;
 
-	if (unlikely(hyp_vcpu)) {
-		/*
-		 * KVM (and pKVM) doesn't support SME guests for now, and
-		 * ensures that SME features aren't enabled in pstate when
-		 * loading a vcpu. Therefore, if SME features enabled the host
-		 * is misbehaving.
-		 */
-		if (unlikely(system_supports_sme() && read_sysreg_s(SYS_SVCR)))
-			goto out;
+	/*
+	 * KVM (and pKVM) doesn't support SME guests, and ensures that SME
+	 * features aren't enabled in pstate when loading a vcpu. Therefore,
+	 * if SME features enabled it's either a bug or a malicious host.
+	 */
+	if (unlikely(system_supports_sme() && read_sysreg_s(SYS_SVCR)))
+		goto out;
 
+	if (unlikely(hyp_vcpu)) {
 		if (hyp_vcpu->power_state == PSCI_0_2_AFFINITY_LEVEL_ON_PENDING)
 			pkvm_reset_vcpu(hyp_vcpu);
 
@@ -1417,7 +1420,7 @@ static void handle___pkvm_enable_tracing(struct kvm_cpu_context *host_ctxt)
 
 static void handle___pkvm_swap_reader_tracing(struct kvm_cpu_context *host_ctxt)
 {
-	DECLARE_REG(int, cpu, host_ctxt, 1);
+	DECLARE_REG(unsigned int, cpu, host_ctxt, 1);
 
 	cpu_reg(host_ctxt, 1) = __pkvm_swap_reader_tracing(cpu);
 }

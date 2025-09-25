@@ -1166,13 +1166,11 @@ static int dump_sockaddr(char **buffer, int *buffer_size,
 	if (!ne)
 		switch (s_addr->sa_family) {
 		case AF_UNIX:
-			if (addr_len >= sizeof(struct sockaddr_un)) {
-				struct sockaddr_un *s_un =
-					(struct sockaddr_un *)s_addr;
-				ne |= append_string_f(buffer, buffer_size,
-					aux_buffer, aux_buffer_size, 0,
-					" UN \"%s\"", s_un->sun_path);
-			}
+			/*
+			 * Do not log the sendmsg system call when
+			 * its socket family is AF_UNIX.
+			 */
+			ne = -1;
 			break;
 		case AF_INET:
 			if (addr_len >= sizeof(struct sockaddr_in)) {
@@ -1402,7 +1400,7 @@ static int dump_syscall_default(char **buffer, int *buffer_size,
  * @buffer: target string
  * @buffer_size: target size, including terminator
  * @sd: seccomp invocation descriptor
- * Returns 0 if successful, 1 if text was clipped
+ * Returns 0 if successful, 1 if text was clipped, -1 if not to log
  */
 static int dump_syscall_base(char *buffer, int buffer_size,
 				const struct seccomp_data *sd)
@@ -1411,43 +1409,21 @@ static int dump_syscall_base(char *buffer, int buffer_size,
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 
 	static struct syscall_api apis[] = {
-		{__NR_read, "read", 3},
-		{__NR_write, "write", 3},
-		#ifdef __NR_open
-		{__NR_open, "open", 3, AS0},
-		#endif
-		{__NR_close, "close", 1},
-		#ifdef __NR_stat
-		{__NR_stat, "stat", 2, AS0},
-		#endif
-		{__NR_fstat, "fstat", 2},
-		#ifdef __NR_lstat
-		{__NR_lstat, "lstat", 2, AS0},
-		#endif
+		/*
+		 * The next lines are examples of how to specify formatters
+		 * depending on syscall parameters
+		 *		{__NR_read, "read", 3},
+		 *		{__NR_write, "write", 3},
+		 *		{__NR_open, "open", 3, AS0},
+		 *		{__NR_close, "close", 1},
+		 *		#ifdef __NR_renameat
+		 *		{__NR_renameat, "renameat", 4, AS1 | AS3},
+		 *		#endif
+		 */
 		{__NR_sendto, "sendto", 6},
 		{__NR_sendmsg, "sendmsg", 3, 0, dump_sendmsg},
-		#ifdef __NR_unlinkat
-		{__NR_unlinkat, "unlinkat", 3, AS1},
-		#endif
-		#ifdef __NR_renameat
-		{__NR_renameat, "renameat", 4, AS1 | AS3},
-		#endif
-		#ifdef __NR_statfs
-		{__NR_statfs, "statfs", 2, AS0},
-		#endif
-		#ifdef __NR_faccessat
-		{__NR_faccessat, "faccessat", 3, AS1},
-		#endif
-		#ifdef __NR_chmodat
-		{__NR_fchmodat, "fchmodat", 3, AS1},
-		#endif
-		#ifdef __NR_openat
-		{__NR_openat, "openat", 4, AS1},
-		#endif
-		#ifdef __NR_readlinkat
-		{__NR_readlinkat, "readlinkat", 4, AS1},
-		#endif
 	};
+
 #pragma GCC diagnostic pop
 
 	char sbuffer[100];
@@ -1491,19 +1467,24 @@ static int dump_syscall_base(char *buffer, int buffer_size,
  * @command: command of process invoking syscall
  * @signr: signal number
  * @sd: nonnull pointer to seccomp descriptor
+ * Returns 0 if successful, 1 if text was clipped, -1 if not to log
  */
-static void dump_syscall(char *buffer, int buffer_size, const char *command,
+static int dump_syscall(char *buffer, int buffer_size, const char *command,
 			long signr, const struct seccomp_data *sd)
 {
 	int n_copied = snprintf(buffer, buffer_size,
 			"seccomp '%s' signum %ld pid %d uid %d ",
 			command, signr, current->pid, current_uid().val);
+
 	n_copied = n_copied < buffer_size
 		?  dump_syscall_base(buffer + n_copied, buffer_size - n_copied,
 				sd)
 		: 1;
-	if (n_copied) // something was truncated
+
+	if (n_copied > 0) // something was truncated
 		strscpy(buffer + buffer_size - 4, "...", sizeof("..."));
+
+	return n_copied;
 }
 
 #define MSG_SZ 1024  // Limit actually set by DSMS
@@ -1518,14 +1499,18 @@ noinline void seccomp_notify_dsms(unsigned long syscall, long signr, u32 action,
 	get_task_comm(comm_buf, main_thread);
 	if (unlikely(strncmp("kumihodecoder", comm_buf, sizeof(main_thread->comm)) == 0)) {
 		char *msg = kcalloc(1, MSG_SZ, GFP_KERNEL);
-		int i;
+		int i, dump_status;
 
 		if (msg) {
-			dump_syscall(msg, MSG_SZ, comm_buf, signr, sd);
-			i = dsms_send_message("KMH0", msg, action);
-			if (unlikely(i != DSMS_SUCCESS))
-				pr_warn("%s::dsms_send_message failed: error %d msg <%s>\n",
+			dump_status = dump_syscall(msg, MSG_SZ, comm_buf, signr, sd);
+
+			if (dump_status >= 0) {
+				i = dsms_send_message("KMH0", msg, action);
+				if (unlikely(i != DSMS_SUCCESS))
+					pr_warn("%s::dsms_send_message failed: error %d msg <%s>\n",
 						__func__, i, msg);
+			}
+
 			kfree(msg);
 		} else
 			pr_warn("%s: out of memory", __func__);

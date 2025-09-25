@@ -104,7 +104,7 @@ static ssize_t sec_avc_log_write(struct file *file,
 		goto out;
 
 	ret = -EINVAL;
-	if (sscanf(page, "%u", &new_value) != 1) {
+	if (kstrtouint(page, 10, &new_value) != 0) {
 		pr_info("%s\n", page);
 		/* print avc_log to sec_avc_log_buf */
 		sec_avc_log("%s", page);
@@ -140,14 +140,14 @@ static const struct proc_ops avc_msg_file_ops = {
 };
 
 /*
-static const struct proc_ops alignment_proc_ops = {
-	.proc_open	= alignment_proc_open,
-	.proc_read	= seq_read,
-	.proc_lseek	= seq_lseek,
-	.proc_release	= single_release,
-	.proc_write	= alignment_proc_write,
-};
-*/
+ * static const struct proc_ops alignment_proc_ops = {
+ *	.proc_open	= alignment_proc_open,
+ *	.proc_read	= seq_read,
+ *	.proc_lseek	= seq_lseek,
+ *	.proc_release	= single_release,
+ *	.proc_write	= alignment_proc_write,
+ * };
+ */
 static int __init sec_avc_log_late_init(void)
 {
 	struct proc_dir_entry *entry;
